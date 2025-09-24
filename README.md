@@ -1,13 +1,7 @@
-<h1 align="center">Masar</h1>
+<h1 align="center">Masar <img width="78" height="58" alt="image" src="https://github.com/user-attachments/assets/ea32bfb3-c94d-4ca7-a92d-439f6bc4fd25" />
+</h1>
 <p align="center">
   <strong>AI-Powered Digital Twin System for Enhanced Riyadh Metro Services</strong>
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/a08d1185-b5cb-4dd5-a4bd-9f9d6e54cde5"
-       alt="Masar Logo"
-       width="500"
-       height="270">
-</p>
 
 ---
 
