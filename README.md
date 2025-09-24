@@ -1,5 +1,4 @@
 
-````markdown
 # Masar  
 AI-Powered Digital Twin System for Enhanced Riyadh Metro Services  
 
