@@ -3,11 +3,11 @@
   <strong>AI-Powered Digital Twin System for Enhanced Riyadh Metro Services</strong>
 </p>
 <p align="center">
-  <!-- قطار صغير يمشي -->
-  <img src="https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif"
+  <img src="https://media.giphy.com/media/3o7aCTfyhYawdOXcFW/giphy.gif"
        alt="Moving Train"
        width="120">
 </p>
+
 <p align="center">
   <img src="https://github.com/user-attachments/assets/a08d1185-b5cb-4dd5-a4bd-9f9d6e54cde5"
        alt="Masar Logo"
