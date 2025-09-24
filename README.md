@@ -1,5 +1,12 @@
-<h1 align="center">Masar <img width="78" height="58" alt="image" src="https://github.com/user-attachments/assets/ea32bfb3-c94d-4ca7-a92d-439f6bc4fd25" />
+<h1 align="center" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+  Masar
+  <img src="https://github.com/user-attachments/assets/ea32bfb3-c94d-4ca7-a92d-439f6bc4fd25" 
+       alt="Masar logo"
+       width="40"
+       height="40"
+       style="vertical-align: middle;" />
 </h1>
+
 <p align="center">
   <strong>AI-Powered Digital Twin System for Enhanced Riyadh Metro Services</strong>
 
