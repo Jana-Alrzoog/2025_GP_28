@@ -1,5 +1,11 @@
-Project: Masar
+Graduation Project: Masar
 AI-Powered Digital Twin System for Enhanced Riyadh Metro Services
+
+King Saud University  
+College of Computer and Information Sciences  
+Department of Information Technology  
+Semester-1 1447H ( Fall 2025 )
+
 
 Prepared by:
 - Jana Alruzuq      – 444201157
@@ -9,4 +15,5 @@ Prepared by:
 
 Supervised by:
 Prof. Reham Alabduljabbar
-King Saud University – College of Computer and Information Sciences
+
+
