@@ -2,11 +2,9 @@
 # Masar  
 AI-Powered Digital Twin System for Enhanced Riyadh Metro Services  
 
----
+<img width="171" height="127" alt="image" src="https://github.com/user-attachments/assets/da692b85-c357-42a6-a620-5c190b871de7" />
+<img width="821" height="151" alt="image" src="https://github.com/user-attachments/assets/78c486b5-e40b-4c43-9ea7-21ef94f76258" />
 
-## Project Title
-**Masar — AI-Powered Digital Twin System for Enhanced Riyadh Metro Services**  
-Repository Name: **2025_GP_28**
 
 ---
 
