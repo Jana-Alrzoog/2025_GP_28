@@ -1,12 +1,8 @@
 <h1 align="center">Masar</h1>
 <p align="center">
   <strong>AI-Powered Digital Twin System for Enhanced Riyadh Metro Services</strong>
-</p>
-<p align="center">
-  <img src="https://media.giphy.com/media/3o7aCTfyhYawdOXcFW/giphy.gif"
-       alt="Moving Train"
-       width="120">
-</p>
+<img width="208" height="127" alt="image" src="https://github.com/user-attachments/assets/cc0bd1f6-aee8-4181-a781-8343d86c06a4" />
+
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/a08d1185-b5cb-4dd5-a4bd-9f9d6e54cde5"
