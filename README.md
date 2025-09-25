@@ -1,11 +1,12 @@
 <h1 align="center" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
   Masar
-  <img src="https://github.com/user-attachments/assets/ff46faa0-16b5-4a57-93fc-d9c6e27ddde7" />
-" 
-       alt="Masar logo"
-       width="40"
-       height="40"
-       style="vertical-align: middle;" />
+  <img 
+    src="https://github.com/user-attachments/assets/ff46faa0-16b5-4a57-93fc-d9c6e27ddde7"
+    alt="Masar logo"
+    width="40"
+    height="40"
+    style="vertical-align: middle;"
+  />
 </h1>
 
 <p align="center">
