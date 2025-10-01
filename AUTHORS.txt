@@ -1,0 +1,12 @@
+Project: Masar
+AI-Powered Digital Twin System for Enhanced Riyadh Metro Services
+
+Prepared by:
+- Jana Alruzuq      – 444201157
+- Munerah Alswied   – 444201147
+- Haya Alajmi       – 444200581
+- Haya Alfayez      – 444200858
+
+Supervised by:
+Prof. Reham Alabduljabbar
+King Saud University – College of Computer and Information Sciences
