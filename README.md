@@ -1,11 +1,9 @@
 
+
+#  Masar 🚆
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?size=28&duration=4000&color=007ACC&center=true&vCenter=true&lines=Masar:+AI-Powered+Digital+Twin+Assistant;for+Riyadh+Metro+Services" />
+  <img src="https://readme-typing-svg.demolab.com?size=20&duration=4000&pause=800&color=808080&center=true&vCenter=true&width=700&lines=AI-Powered+Digital+Twin+System;for+Enhanced+Riyadh+Metro+Services" />
 </p>
-
----
-
-# 🚆 Masar: AI-Powered Digital Twin Assistant for Riyadh Metro
 
 ## 📌 Introduction
 **Masar** is an innovative graduation project that leverages **Digital Twin technology** and **Artificial Intelligence** to enhance passenger experience and improve operations for Riyadh Metro.  
