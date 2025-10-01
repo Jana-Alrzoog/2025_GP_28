@@ -26,16 +26,6 @@ It supports Vision 2030 goals by improving urban mobility, sustainability, and s
 
 ## Launching Instructions
 
-1. Clone & install
-
-git clone https://github.com/<your-org-or-user>/masar.git
-cd masar
-flutter pub get
-
-
-2. Run the app
-
-flutter run
 
 
 
