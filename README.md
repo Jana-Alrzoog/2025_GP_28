@@ -24,33 +24,18 @@ It supports Vision 2030 goals by improving urban mobility, sustainability, and s
 
 ---
 
-## 🚀 Getting Started
+## Launching Instructions
 
-### 🔹 Prerequisites
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) installed  
-- [Android Studio](https://developer.android.com/studio) or [Xcode](https://developer.apple.com/xcode/) for emulator  
-- VS Code with Flutter & Dart extensions  
+1. Clone & install
 
-### 🔹 Steps to Run
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/Jana-Alrzoog/2025_GP_28.git
-   cd 2025_GP_28
-````
+git clone https://github.com/<your-org-or-user>/masar.git
+cd masar
+flutter pub get
 
 
-2. Get dependencies:
+2. Run the app
 
-   ```bash
-   flutter pub get
-   ```
-
-
-3. Run the project:
-
-   ```bash
-   flutter run
-   ```
+flutter run
 
 
 
