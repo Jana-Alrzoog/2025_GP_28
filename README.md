@@ -38,11 +38,14 @@ It supports Vision 2030 goals by improving urban mobility, sustainability, and s
    cd 2025_GP_28
 ````
 
+
 2. Get dependencies:
 
    ```bash
    flutter pub get
    ```
+
+
 3. Run the project:
 
    ```bash
