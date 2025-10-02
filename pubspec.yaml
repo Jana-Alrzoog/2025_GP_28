@@ -62,20 +62,20 @@ flutter:
 
   assets:
    - assets/images/
-
+   - assets/images/MasarLogo.png
    
   fonts:
     - family: Handicrafts     
       fonts:
         - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 400
-        - asset: assets/fonts/TheYearofHandicrafts-Medium.otf
+        - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 500
-        - asset: assets/fonts/TheYearofHandicrafts-SemiBold.otf
+        - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 600
-        - asset: assets/fonts/TheYearofHandicrafts-Bold.otf
+        - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 700
-        - asset: assets/fonts/TheYearofHandicrafts-Black.otf
+        - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 900
   # To add assets to your 
 application, add an assets section, like this:

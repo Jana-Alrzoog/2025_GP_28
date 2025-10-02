@@ -44,10 +44,10 @@ class _SignInScreenState extends State<SignInScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        'مرحبًا بك مجددًا',
+                        'مرحبًا بعودتـك',
                         style: TextStyle(
                           fontSize: 30.0,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: lightColorScheme.primary,
                         ),
                       ),
@@ -57,12 +57,12 @@ class _SignInScreenState extends State<SignInScreen> {
                       TextFormField(
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'الرجاء ادخال الايميل';
+                            return 'الرجـاء ادخـال الايميـل';
                           }
                           return null;
                         },
                         decoration: InputDecoration(
-                          label: const Text('الايميل'),
+                          label: const Text('الايميـل'),
                           hintText: 'Enter Email',
                           hintStyle: const TextStyle(
                             color: Colors.black26,
@@ -89,13 +89,13 @@ class _SignInScreenState extends State<SignInScreen> {
                         obscuringCharacter: '*',
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'الرجاء ادخال رمز المرور';
+                            return 'الرجاء ادخـال رمز المـرور';
                           }
                           return null;
                         },
                         decoration: InputDecoration(
-                          label: const Text('رمز المرور'),
-                          hintText: 'ادخل رمز المرور',
+                          label: const Text('رمز المـرور'),
+                          hintText: 'ادخـل رمز المـرور',
                           hintStyle: const TextStyle(
                             color: Colors.black26,
                           ),
@@ -122,7 +122,7 @@ class _SignInScreenState extends State<SignInScreen> {
                          
                           GestureDetector(
                             child: Text(
-                              'نسيت رمز المرور؟',
+                              'نسيت رمز المـرور؟',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: lightColorScheme.primary,
@@ -222,7 +222,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                           ),
                           const Text(
-                            'ليس لديك حساب؟ ',
+                            ' ليس لديك حساب؟ ',
                             style: TextStyle(
                               color: Colors.black45,
                             ),
