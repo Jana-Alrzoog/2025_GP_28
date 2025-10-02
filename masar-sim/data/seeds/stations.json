@@ -1,1 +1,80 @@
-
+[
+  {
+    "station_id": "S1",
+    "name": "KAFD - King Abdullah Financial District",
+    "type": "interchange",
+    "capacity_station": 5000,
+    "capacity_platform": 1500,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Blue"
+  },
+  {
+    "station_id": "S2",
+    "name": "STC (Olaya)",
+    "type": "urban",
+    "capacity_station": 3000,
+    "capacity_platform": 1200,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Red"
+  },
+  {
+    "station_id": "S3",
+    "name": "Qasr Al-Hokm",
+    "type": "urban",
+    "capacity_station": 2500,
+    "capacity_platform": 1000,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Orange"
+  },
+  {
+    "station_id": "S4",
+    "name": "National Museum",
+    "type": "cultural",
+    "capacity_station": 2000,
+    "capacity_platform": 800,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Green"
+  },
+  {
+    "station_id": "S5",
+    "name": "Airport T1-2",
+    "type": "airport",
+    "capacity_station": 5500,
+    "capacity_platform": 2000,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Yellow"
+  },
+  {
+    "station_id": "S6",
+    "name": "Western Station",
+    "type": "intercity",
+    "capacity_station": 5000,
+    "capacity_platform": 1800,
+    "train_capacity": {
+      "train_total": 557,
+      "carriage_capacity": 228,
+      "cars_per_train": 4
+    },
+    "line_color": "Orange"
+  }
+]
