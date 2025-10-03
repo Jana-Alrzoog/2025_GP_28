@@ -68,6 +68,7 @@ class WelcomeScreen extends StatelessWidget {
               alignment: Alignment.bottomRight,
               child: Row(
                 children: [
+                  
                   const Expanded(
                     child: WelcomeButton(
                       buttonText: 'تسجيـل الدخـول',

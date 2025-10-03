@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'signup_screen.dart';
 import '../widgets/custom_scaffold.dart';
-
+import 'package:email_validator/email_validator.dart';
 import '../../theme/theme.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -14,18 +14,13 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formSignInKey = GlobalKey<FormState>();
-  bool rememberPassword = true;
+
   @override
   Widget build(BuildContext context) {
     return CustomScaffold(
       child: Column(
         children: [
-          const Expanded(
-            flex: 1,
-            child: SizedBox(
-              height: 10,
-            ),
-          ),
+          const Expanded(flex: 1, child: SizedBox(height: 10)),
           Expanded(
             flex: 7,
             child: Container(
@@ -43,83 +38,145 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // العنوان
                       Text(
-                        'مرحبًا بعودتـك',
+                        'مرحبًــا بعودتـك',
                         style: TextStyle(
                           fontSize: 30.0,
                           fontWeight: FontWeight.w700,
+                          fontFamily: 'Handicrafts', 
                           color: lightColorScheme.primary,
                         ),
                       ),
-                      const SizedBox(
-                        height: 40.0,
-                      ),
+                      const SizedBox(height: 40.0),
+
+                      // الايميل
                       TextFormField(
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الرجـاء ادخـال الايميـل';
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) return 'الرجـاء إدخال الإيميـل';
+                          if (!EmailValidator.validate(text)) {
+                            return 'صيغة الإيميـل غير صحيحة';
                           }
                           return null;
                         },
                         decoration: InputDecoration(
-                          label: const Text('الايميـل'),
-                          hintText: 'Enter Email',
-                          hintStyle: const TextStyle(
-                            color: Colors.black26,
-                          ),
+                          labelText: 'الايميـل',
+                          floatingLabelStyle:
+                              MaterialStateTextStyle.resolveWith((states) {
+                            if (states.contains(MaterialState.error)) {
+                              return const TextStyle(
+                                  color: Color(0xFFBA1A1A),
+                                  fontWeight: FontWeight.w600);
+                            }
+                            if (states.contains(MaterialState.focused)) {
+                              return const TextStyle(
+                                  color: Color(0xFF43B649),
+                                  fontWeight: FontWeight.w600); // أخضر
+                            }
+                            return const TextStyle(color: Colors.grey);
+                          }),
+                          hintText: 'ادخـل ايميـلك المسجـل',
+                          hintStyle: const TextStyle(color: Colors.black26),
                           border: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Colors.black12, // Default border color
-                            ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           enabledBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Colors.black12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
                             borderSide: const BorderSide(
-                              color: Colors.black12, // Default border color
+                              color: Color(0xFF43B649),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
+                      const SizedBox(height: 25.0),
+
+                      // كلمة المرور
                       TextFormField(
                         obscureText: true,
                         obscuringCharacter: '*',
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الرجاء ادخـال رمز المـرور';
+                          final password = value ?? '';
+                          if (password.isEmpty) {
+                            return 'الرجاء إدخال رمز المرور';
                           }
                           return null;
                         },
                         decoration: InputDecoration(
-                          label: const Text('رمز المـرور'),
+                          labelText: 'رمز المـرور',
+                          floatingLabelStyle:
+                              MaterialStateTextStyle.resolveWith((states) {
+                            if (states.contains(MaterialState.error)) {
+                              return const TextStyle(
+                                  color: Color(0xFFBA1A1A),
+                                  fontWeight: FontWeight.w600);
+                            }
+                            if (states.contains(MaterialState.focused)) {
+                              return const TextStyle(
+                                  color: Color(0xFF984C9D),
+                                  fontWeight: FontWeight.w600); // بنفسجي
+                            }
+                            return const TextStyle(color: Colors.grey);
+                          }),
                           hintText: 'ادخـل رمز المـرور',
-                          hintStyle: const TextStyle(
-                            color: Colors.black26,
-                          ),
+                          hintStyle: const TextStyle(color: Colors.black26),
                           border: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Colors.black12, // Default border color
-                            ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           enabledBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Colors.black12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
                             borderSide: const BorderSide(
-                              color: Colors.black12, // Default border color
+                              color: Color(0xFF984C9D),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
+                      const SizedBox(height: 25.0),
+
+                      // نسيت كلمة المرور
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                         
                           GestureDetector(
                             child: Text(
                               'نسيت رمز المـرور؟',
@@ -131,35 +188,27 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
+                      const SizedBox(height: 25.0),
+
+                      // زر تسجيل الدخول
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: lightColorScheme.primary,
+                            foregroundColor: Colors.white,
+                          ),
                           onPressed: () {
-                            if (_formSignInKey.currentState!.validate() &&
-                                rememberPassword) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Processing Data'),
-                                ),
-                              );
-                            } else if (!rememberPassword) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Please agree to the processing of personal data')),
-                              );
+                            if (_formSignInKey.currentState!.validate()) {
+                              // ✅ بدون SnackBar
                             }
                           },
                           child: const Text('تسجيـل دخـول'),
-                          
                         ),
                       ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
+                      const SizedBox(height: 25.0),
+
+                      // Divider
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -170,15 +219,10 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                           ),
                           const Padding(
-                            padding: EdgeInsets.symmetric(
-                              vertical: 0,
-                              horizontal: 10,
-                            ),
+                            padding: EdgeInsets.symmetric(horizontal: 10),
                             child: Text(
                               'Sign up with',
-                              style: TextStyle(
-                                color: Colors.black45,
-                              ),
+                              style: TextStyle(color: Colors.black45),
                             ),
                           ),
                           Expanded(
@@ -189,22 +233,13 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          
-                        ],
-                      ),
-                      const SizedBox(
-                        height: 25.0,
-                      ),
-                      // don't have an account
+                      const SizedBox(height: 25.0),
+
+                      // ما عندك حساب؟
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [ GestureDetector(
+                        children: [
+                          GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -223,16 +258,11 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                           const Text(
                             ' ليس لديك حساب؟ ',
-                            style: TextStyle(
-                              color: Colors.black45,
-                            ),
+                            style: TextStyle(color: Colors.black45),
                           ),
-                         
                         ],
                       ),
-                      const SizedBox(
-                        height: 20.0,
-                      ),
+                      const SizedBox(height: 20.0),
                     ],
                   ),
                 ),
