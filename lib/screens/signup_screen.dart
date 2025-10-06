@@ -4,6 +4,9 @@ import '../screens/signin_screen.dart';
 import '../theme/theme.dart';
 import 'package:email_validator/email_validator.dart';
 import '../widgets/custom_scaffold.dart';
+import 'home_shell.dart';
+
+
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -259,10 +262,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                           onPressed: () {
                             if (_formSignupKey.currentState!.validate()) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Processing Data')),
-                              );
-                            }
+                             Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(builder: (_) => const HomeShell()),
+                          );
+                                                      }
                           },
                           child: const Text('انشئ الحسـاب'),
                         ),

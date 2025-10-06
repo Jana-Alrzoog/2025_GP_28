@@ -3,6 +3,8 @@ description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+animated_bottom_navigation_bar: ^1.3.3
+animated_bottom_bar: ^1.0.0
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -31,12 +33,16 @@ dependencies:
   flutter:
     sdk: flutter
   email_validator: ^2.1.17
-     
-
+  bottom_bar: ^2.0.3 
+  bottom_bar_matu: ^1.5.0
+  fluid_bottom_nav_bar: ^1.4.0
+  bottom_bar_with_sheet: ^2.4.0
+  turf: ^0.0.9
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  icons_plus: ^5.0.0 
+  icons_plus: 3.0.0 
+  google_maps_flutter: ^2.13.1
   
 dev_dependencies:
   flutter_test:
@@ -63,6 +69,8 @@ flutter:
   assets:
    - assets/images/
    - assets/images/MasarLogo.png
+   - assets/data/riyadh_boundary.geojson
+   - assets/data/metro_stations.json
    
   fonts:
     - family: Handicrafts     
