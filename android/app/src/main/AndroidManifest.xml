@@ -14,7 +14,7 @@
         <!-- 👇 مفتاح خرائط قوقل لازم يكون داخل <application> -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAsaKNoswFUv0cdoouFf2JZHfjjSEjwTH4" />
+            android:value="AIzaSyCvoEo_rG3hYwzXv2j8AP_2fKvJ1Y0fvr4" />
 
         <activity
             android:name=".MainActivity"

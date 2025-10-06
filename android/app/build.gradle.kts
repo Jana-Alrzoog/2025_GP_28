@@ -4,6 +4,15 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val MAPS_API_KEY: String = localProps.getProperty("AIzaSyCvoEo_rG3hYwzXv2j8AP_2fKvJ1Y0fvr4") ?: ""
 
 android {
     namespace = "com.example.flutter_application_1"
@@ -28,6 +37,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["AIzaSyCvoEo_rG3hYwzXv2j8AP_2fKvJ1Y0fvr4"] = MAPS_API_KEY
     }
 
     buildTypes {
