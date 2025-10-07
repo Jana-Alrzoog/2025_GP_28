@@ -1,5 +1,4 @@
 
-````md
 # Step 01 — Seeds & Config (v1.0)
 **Date:** 2025-10-07 • **Owner:** Jana • **Timezone:** Asia/Riyadh
 
