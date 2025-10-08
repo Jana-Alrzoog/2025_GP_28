@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.flutter_application_1">
 
-    <!-- 👇 الصلاحيات لازم تكون تحت <manifest> مباشرة (خارج <application>) -->
+    
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -11,7 +11,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- 👇 مفتاح خرائط قوقل لازم يكون داخل <application> -->
+     
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCvoEo_rG3hYwzXv2j8AP_2fKvJ1Y0fvr4" />
@@ -36,13 +36,13 @@
             </intent-filter>
         </activity>
 
-        <!-- لا تحذفه: خاص بفلتر -->
+   
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
-    <!-- يخص إمكانية مشاركة نص مع تطبيقات ثانية (إعداد افتراضي من Flutter) -->
+ 
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />

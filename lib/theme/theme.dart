@@ -30,51 +30,71 @@ const darkColorScheme = ColorScheme(
   outlineVariant: Color(0xFFC2C8BC),
   surface: Color(0xFFF9FAF3),
   onSurface: Color(0xFF1A1C18),
-  
 );
 
-ThemeData lightMode = ThemeData(
-  useMaterial3: true,
+ThemeData lightMode = _buildTheme(
   brightness: Brightness.light,
-  colorScheme: lightColorScheme,
-
-  // 👇 هنا حطينا الخط الافتراضي
-  fontFamily: 'Handicrafts',
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-    bodyMedium: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-    bodySmall: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-  ),
+  scheme: lightColorScheme,
 );
 
-ThemeData darkMode = ThemeData(
-  useMaterial3: true,
+ThemeData darkMode = _buildTheme(
   brightness: Brightness.dark,
-  colorScheme: darkColorScheme,
-
-  // 👇 نفس الشي للوضع الليلي
-  fontFamily: 'Handicrafts',
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-    bodyMedium: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-    bodySmall: TextStyle(
-      fontFamily: 'Handicrafts',
-      fontFamilyFallback: ['Tajawal'],
-    ),
-  ),
+  scheme: darkColorScheme,
 );
+
+ThemeData _buildTheme({
+  required Brightness brightness,
+  required ColorScheme scheme,
+}) {
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: scheme,
+    // الخط الأساسي يبقى عربيك/Handicrafts مثل ما هو
+    fontFamily: 'Handicrafts',
+  );
+
+  // نضيف AppLatin كـ fallback لكل أنماط النص — بدون ما نغيّر الخط الأساسي
+  final textWithLatin = _withLatinFallback(base.textTheme);
+  final primaryTextWithLatin = _withLatinFallback(base.primaryTextTheme);
+
+  return base.copyWith(
+    textTheme: textWithLatin,
+    primaryTextTheme: primaryTextWithLatin,
+    // لو حاب تتأكد في AppBar/Buttons وغيرهم:
+    appBarTheme: base.appBarTheme.copyWith(
+      titleTextStyle: (base.appBarTheme.titleTextStyle ?? const TextStyle())
+          .copyWith(fontFamilyFallback: const ['AppLatin']),
+      toolbarTextStyle: (base.appBarTheme.toolbarTextStyle ?? const TextStyle())
+          .copyWith(fontFamilyFallback: const ['AppLatin']),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      hintStyle: (base.inputDecorationTheme.hintStyle ?? const TextStyle())
+          .copyWith(fontFamilyFallback: const ['AppLatin']),
+    ),
+  );
+}
+
+/// يحقن AppLatin كـ fallback في جميع TextStyles داخل TextTheme.
+TextTheme _withLatinFallback(TextTheme t) {
+  TextStyle addFallback(TextStyle? s) =>
+      (s ?? const TextStyle()).copyWith(fontFamilyFallback: const ['AppLatin', 'Roboto']);
+
+  return TextTheme(
+    displayLarge:    addFallback(t.displayLarge),
+    displayMedium:   addFallback(t.displayMedium),
+    displaySmall:    addFallback(t.displaySmall),
+    headlineLarge:   addFallback(t.headlineLarge),
+    headlineMedium:  addFallback(t.headlineMedium),
+    headlineSmall:   addFallback(t.headlineSmall),
+    titleLarge:      addFallback(t.titleLarge),
+    titleMedium:     addFallback(t.titleMedium),
+    titleSmall:      addFallback(t.titleSmall),
+    bodyLarge:       addFallback(t.bodyLarge),
+    bodyMedium:      addFallback(t.bodyMedium),
+    bodySmall:       addFallback(t.bodySmall),
+    labelLarge:      addFallback(t.labelLarge),
+    labelMedium:     addFallback(t.labelMedium),
+    labelSmall:      addFallback(t.labelSmall),
+  );
+}

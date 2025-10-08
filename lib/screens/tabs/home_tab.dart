@@ -92,6 +92,7 @@ class _HomeTabState extends State<HomeTab> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // شريط البحث (ألوان فقط)
                   Material(
                     elevation: 4,
                     borderRadius: BorderRadius.circular(14),
@@ -105,11 +106,11 @@ class _HomeTabState extends State<HomeTab> {
                       textAlign: TextAlign.right,
                       decoration: InputDecoration(
                         hintText: 'ابحث عن اسم المحطة… ',
-                        prefixIcon: const Icon(Icons.search),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF984C9D)),
                         suffixIcon: _searchCtrl.text.isEmpty
                             ? null
                             : IconButton(
-                                icon: const Icon(Icons.clear),
+                                icon: const Icon(Icons.clear, color: Color(0xFF9CA3AF)),
                                 onPressed: () {
                                   setState(() {
                                     _searchCtrl.clear();
@@ -130,20 +131,21 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                  // لوحة الاقتراحات
-                  if (_showSuggestions && _suggestions.isNotEmpty)
-                    const SizedBox(height: 8),
+                  // لوحة الاقتراحات (ألوان فقط)
+                  if (_showSuggestions && _suggestions.isNotEmpty) const SizedBox(height: 8),
                   if (_showSuggestions && _suggestions.isNotEmpty)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 320),
                       child: Material(
-                        elevation: 6,
+                        elevation: 4,
                         borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
                         child: ListView.separated(
                           shrinkWrap: true,
                           padding: EdgeInsets.zero,
                           itemCount: _suggestions.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1, color: Color(0xFFE5E7EB)),
                           itemBuilder: (context, i) {
                             final st = _suggestions[i];
                             final subtitle = st.lines.isNotEmpty
@@ -151,11 +153,23 @@ class _HomeTabState extends State<HomeTab> {
                                 : (st.altName ?? '');
                             return ListTile(
                               dense: true,
-                              leading: const Icon(Icons.location_on),
-                              title: Text(st.name),
+                              leading: const Icon(Icons.location_on, color: Color(0xFF984C9D)),
+                              title: Text(
+                                st.name,
+                                style: const TextStyle(
+                                  color: Color(0xFF1F1F1F),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               subtitle: subtitle.isEmpty
                                   ? null
-                                  : Text(subtitle, style: const TextStyle(fontSize: 12)),
+                                  : Text(
+                                      subtitle,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
                               onTap: () async {
                                 setState(() {
                                   _searchCtrl.text = st.name;
@@ -189,8 +203,7 @@ class _HomeTabState extends State<HomeTab> {
       return;
     }
 
-    // نفس منطق الترتيب: يبدأ بـ > يحتوي > تشابه بسيط
-    final scored = <({ _Station st, int score, int distance })>[];
+    final scored = <({_Station st, int score, int distance})>[];
     for (final st in _stations) {
       final nameAr = _normalizeForSearch(st.name);
       final nameEn = _normalizeForSearch(st.altName ?? '');
@@ -229,7 +242,6 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   // ===================== القناع والحدود =====================
-
   Future<void> _loadAndBuildMask() async {
     try {
       final raw = await rootBundle.loadString('assets/data/riyadh_boundary.geojson');
@@ -240,9 +252,9 @@ class _HomeTabState extends State<HomeTab> {
 
       final worldRing = <LatLng>[
         const LatLng(-85, -180),
-        const LatLng( 85, -180),
-        const LatLng( 85,  180),
-        const LatLng(-85,  180),
+        const LatLng(85, -180),
+        const LatLng(85, 180),
+        const LatLng(-85, 180),
       ];
 
       final partsCW = rings.map((r) => _ensureCW(r)).toList();
@@ -298,7 +310,6 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   // ===================== تحميل + دمج محطات المترو بالاسم =====================
-
   String _normalizeForSearch(String s) {
     var t = s.trim().toLowerCase();
     const diacritics = [
@@ -423,7 +434,7 @@ class _HomeTabState extends State<HomeTab> {
           );
         }));
 
-      setState(() {}); // يحدّث الواجهة بعد تحميل المحطات
+      setState(() {});
     } catch (e) {
       debugPrint('❌ Failed to load stations JSON: $e');
     }
@@ -686,9 +697,9 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   bool _isCCW(List<LatLng> pts) => _signedArea(pts) > 0;
-  bool _isCW (List<LatLng> pts) => _signedArea(pts) < 0;
+  bool _isCW(List<LatLng> pts) => _signedArea(pts) < 0;
   List<LatLng> _ensureCCW(List<LatLng> pts) => _isCCW(pts) ? pts : pts.reversed.toList();
-  List<LatLng> _ensureCW (List<LatLng> pts) => _isCW(pts)  ? pts : pts.reversed.toList();
+  List<LatLng> _ensureCW(List<LatLng> pts) => _isCW(pts) ? pts : pts.reversed.toList();
 
   // ===================== إذابة الحدود =====================
   String _keyPt(LatLng p, {double precision = 1e-6}) {
@@ -719,7 +730,7 @@ class _HomeTabState extends State<HomeTab> {
     double precision = 1e-6,
   }) {
     final edgeCount = <String, List<LatLng>>{};
-    final edgeAB   = <String, List<LatLng>>{};
+    final edgeAB = <String, List<LatLng>>{};
 
     for (final ring in parts) {
       for (final e in _ringEdges(ring)) {
@@ -815,7 +826,6 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   // ===================== نص/لون =====================
-
   String _shortLineName(String line) {
     if (line.contains('الأزرق') || line.toLowerCase().contains('blue')) return 'الأزرق';
     if (line.contains('الأحمر') || line.toLowerCase().contains('red')) return 'الأحمر';
@@ -832,7 +842,7 @@ class _HomeTabState extends State<HomeTab> {
   static const Color _purpleHex = Color(0xFF984C9D);
   static const Color _redHex    = Color(0xFFD12027);
   static const Color _orangeHex = Color(0xFFF68D39);
-  static const Color _yellowHex = Color(0xFFFFC107); // غطّيت الأصفر التقريبي
+  static const Color _yellowHex = Color(0xFFFFC107); // تقريبي للأصفر
 
   Color _colorForLine(String lineAr) {
     final ln = lineAr.toLowerCase();

@@ -36,18 +36,7 @@ class _HomeShellState extends State<HomeShell> {
       extendBody: true,
       backgroundColor: const Color(0xFFF5F5F5),
 
-      appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(59, 59, 59, 1),
-        centerTitle: true,
-        title: const Text(
-          'مســـــــــار',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Handicrafts',
-          ),
-        ),
-      ),
+    
 
       // نستخدم Stack حتى نثبت البار بأسفل الشاشة بدون أي فراغ
       body: Stack(

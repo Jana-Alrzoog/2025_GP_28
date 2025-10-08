@@ -38,11 +38,14 @@ dependencies:
   fluid_bottom_nav_bar: ^1.4.0
   bottom_bar_with_sheet: ^2.4.0
   turf: ^0.0.9
+  
+  
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   icons_plus: 3.0.0 
   google_maps_flutter: ^2.13.1
+  flutter_svg: 1.1.6
   
 dev_dependencies:
   flutter_test:
@@ -68,6 +71,7 @@ flutter:
 
   assets:
    - assets/images/
+   
    - assets/images/MasarLogo.png
    - assets/data/riyadh_boundary.geojson
    - assets/data/metro_stations.json
@@ -85,6 +89,13 @@ flutter:
           weight: 700
         - asset: assets/fonts/TheYearofHandicrafts-Regular.otf
           weight: 900
+    - family: AppLatin
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+        - asset: assets/fonts/Inter.ttf
+          weight: 500
+        - asset: assets/fonts/Inter.ttf
+          weight: 700
   # To add assets to your 
 application, add an assets section, like this:
   # assets:

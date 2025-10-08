@@ -17,8 +17,10 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScaffold(
-      child: Column(
+   return CustomScaffold(
+        backgroundAsset: 'assets/images/RegistrationBG.svg',
+        isSvg: true,
+        child: Column(
         children: [
           const Expanded(flex: 1, child: SizedBox(height: 10)),
           Expanded(
@@ -209,31 +211,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       const SizedBox(height: 25.0),
 
                       // Divider
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              thickness: 0.7,
-                              color: Colors.grey.withOpacity(0.5),
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(
-                              'Sign up with',
-                              style: TextStyle(color: Colors.black45),
-                            ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              thickness: 0.7,
-                              color: Colors.grey.withOpacity(0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 25.0),
+                     
 
                       // ما عندك حساب؟
                       Row(

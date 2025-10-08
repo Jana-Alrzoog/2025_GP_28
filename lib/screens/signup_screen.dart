@@ -6,8 +6,6 @@ import 'package:email_validator/email_validator.dart';
 import '../widgets/custom_scaffold.dart';
 import 'home_shell.dart';
 
-
-
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -18,9 +16,22 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formSignupKey = GlobalKey<FormState>();
 
+  // ✅ مضاف: متحكمات كلمة المرور والتأكيد
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScaffold(
+      backgroundAsset: 'assets/images/RegistrationBG.svg',
+      isSvg: true,
       child: Column(
         children: [
           const Expanded(flex: 1, child: SizedBox(height: 10)),
@@ -43,7 +54,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     children: [
                       // العنوان
                       Text(
-                        'مرحبًــا بـك في مســـــــار ',
+                        'مرحبًــا بـك',
                         style: TextStyle(
                           fontSize: 30.0,
                           fontWeight: FontWeight.w700,
@@ -67,13 +78,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               MaterialStateTextStyle.resolveWith((states) {
                             if (states.contains(MaterialState.error)) {
                               return const TextStyle(
-                                color: Color(0xFFBA1A1A), // أحمر عند الخطأ
+                                color: Color(0xFFBA1A1A),
                                 fontWeight: FontWeight.w600,
                               );
                             }
                             if (states.contains(MaterialState.focused)) {
                               return const TextStyle(
-                                color: Color(0xFFF68D39), // برتقالي عند التركيز
+                                color: Color(0xFFF68D39),
                                 fontWeight: FontWeight.w600,
                               );
                             }
@@ -137,7 +148,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             }
                             if (states.contains(MaterialState.focused)) {
                               return const TextStyle(
-                                color: Color(0xFF43B649), // أخضر
+                                color: Color(0xFF43B649),
                                 fontWeight: FontWeight.w600,
                               );
                             }
@@ -179,8 +190,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                       // كلمة المرور
                       TextFormField(
+                        controller: _passwordController,
                         obscureText: true,
                         obscuringCharacter: '*',
+                        autofillHints: const [AutofillHints.newPassword],
                         validator: (value) {
                           final password = value ?? '';
                           if (password.isEmpty) {
@@ -212,7 +225,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             }
                             if (states.contains(MaterialState.focused)) {
                               return const TextStyle(
-                                color: Color(0xFF984C9D), // بنفسجي
+                                color: Color(0xFF984C9D),
                                 fontWeight: FontWeight.w600,
                               );
                             }
@@ -250,6 +263,76 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                         ),
                       ),
+
+                      const SizedBox(height: 20.0),
+
+                      // ✅ تأكيد كلمة المرور باللون الأزرق
+                      TextFormField(
+                        controller: _confirmController,
+                        obscureText: true,
+                        obscuringCharacter: '*',
+                        autofillHints: const [AutofillHints.newPassword],
+                        cursorColor: const Color(0xFF00ADE5), // الكيرسر أزرق
+                        validator: (value) {
+                          final confirm = value ?? '';
+                          if (confirm.isEmpty) {
+                            return 'الرجاء تأكيد رمز المرور';
+                          }
+                          if (confirm != _passwordController.text) {
+                            return 'رمز المرور غير متطابق';
+                          }
+                          return null;
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'تأكيد رمز المـرور',
+                          hintText: 'أعد إدخال رمز المـرور',
+                          floatingLabelStyle:
+                              MaterialStateTextStyle.resolveWith((states) {
+                            if (states.contains(MaterialState.error)) {
+                              return const TextStyle(
+                                color: Color(0xFFBA1A1A),
+                                fontWeight: FontWeight.w600,
+                              );
+                            }
+                            if (states.contains(MaterialState.focused)) {
+                              return const TextStyle(
+                                color: Color(0xFF00ADE5), // أزرق عند التركيز
+                                fontWeight: FontWeight.w600,
+                              );
+                            }
+                            return const TextStyle(color: Colors.grey);
+                          }),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Colors.black12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFF00ADE5), // إطار أزرق
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(
+                              color: Color(0xFFBA1A1A),
+                              width: 2.0,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+
                       const SizedBox(height: 25.0),
 
                       // زر التسجيل
@@ -262,40 +345,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                           onPressed: () {
                             if (_formSignupKey.currentState!.validate()) {
-                             Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const HomeShell()),
-                          );
-                                                      }
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => const HomeShell(),
+                                ),
+                              );
+                            }
                           },
                           child: const Text('انشئ الحسـاب'),
                         ),
-                      ),
-                      const SizedBox(height: 30.0),
-
-                      // Divider
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              thickness: 0.7,
-                              color: Colors.grey.withOpacity(0.5),
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(
-                              'Sign up with',
-                              style: TextStyle(color: Colors.black45),
-                            ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              thickness: 0.7,
-                              color: Colors.grey.withOpacity(0.5),
-                            ),
-                          ),
-                        ],
                       ),
                       const SizedBox(height: 30.0),
 
