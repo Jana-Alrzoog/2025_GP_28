@@ -41,7 +41,8 @@ class CustomScaffold extends StatelessWidget {
       body: Stack(
         children: [
           background,
-          SafeArea(child: child),
+          // ✅ أزلنا SafeArea لأن الشاشات نفسها تحتوي SafeArea
+          child,
         ],
       ),
     );

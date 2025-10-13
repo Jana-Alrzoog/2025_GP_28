@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:icons_plus/icons_plus.dart';
+import 'package:email_validator/email_validator.dart';
+import 'package:firebase_auth/firebase_auth.dart';           // 👈 Firebase Auth
+import 'package:cloud_firestore/cloud_firestore.dart';       // 👈 Firestore
 import '../screens/signin_screen.dart';
 import '../theme/theme.dart';
-import 'package:email_validator/email_validator.dart';
 import '../widgets/custom_scaffold.dart';
 import 'home_shell.dart';
 
@@ -16,15 +17,55 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formSignupKey = GlobalKey<FormState>();
 
-  // ✅ مضاف: متحكمات كلمة المرور والتأكيد
+  // 🔹 مضاف: متحكمات الاسم+الايميل+الباسورد+التأكيد
+  final _nameController    = TextEditingController();
+  final _emailController   = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmController = TextEditingController();
+  final _confirmController  = TextEditingController();
+
+  bool _isLoading = false;
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  Future<void> _register() async {
+    if (!_formSignupKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    try {
+      // 1) إنشاء الحساب في Firebase Auth
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      final uid = cred.user!.uid;
+
+      // 2) تخزين البيانات في Firestore داخل Passenger/{uid}
+      await FirebaseFirestore.instance.collection('Passenger').doc(uid).set({
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 3) الانتقال بعد النجاح
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeShell()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'حدث خطأ أثناء التسجيل')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -36,7 +77,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         children: [
           const Expanded(flex: 1, child: SizedBox(height: 10)),
           Expanded(
-            flex: 7,
+            flex: 4,
             child: Container(
               padding: const EdgeInsets.fromLTRB(25.0, 50.0, 25.0, 20.0),
               decoration: const BoxDecoration(
@@ -52,7 +93,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // العنوان
                       Text(
                         'مرحبًــا بـك',
                         style: TextStyle(
@@ -66,124 +106,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                       // الاسم
                       TextFormField(
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الاســم مطلوب';
-                          }
-                          return null;
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'الاســم',
-                          floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
-                              return const TextStyle(
-                                color: Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            if (states.contains(MaterialState.focused)) {
-                              return const TextStyle(
-                                color: Color(0xFFF68D39),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            return const TextStyle(color: Colors.grey);
-                          }),
-                          hintText: 'ادخـل اسمـك',
-                          hintStyle: const TextStyle(color: Colors.black26),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFF68D39),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                        controller: _nameController, // 👈 مضاف
+                        validator: (value) =>
+                            (value == null || value.isEmpty) ? 'الاســم مطلوب' : null,
+                        decoration: _decoration(
+                          label: 'الاســم',
+                          hint: 'ادخـل اسمـك',
+                          focusColor: const Color(0xFFF68D39),
                         ),
-                      ),
+                      ), 
                       const SizedBox(height: 25.0),
 
                       // الايميل
                       TextFormField(
+                        controller: _emailController, // 👈 مضاف
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         validator: (value) {
                           final text = value?.trim() ?? '';
-                          if (text.isEmpty) return 'الرجـاء إدخال الإيميـل';
+                          if (text.isEmpty) return 'الرجـاء إدخال البريد الإلكتروني';
                           if (!EmailValidator.validate(text)) {
-                            return 'صيغة الإيميـل غير صحيحة';
+                            return 'صيغة البريد الإلكتروني غير صحيحة';
                           }
                           return null;
                         },
-                        decoration: InputDecoration(
-                          labelText: 'الايميـل',
-                          floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
-                              return const TextStyle(
-                                color: Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            if (states.contains(MaterialState.focused)) {
-                              return const TextStyle(
-                                color: Color(0xFF43B649),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            return const TextStyle(color: Colors.grey);
-                          }),
-                          hintText: 'user@example.com',
-                          hintStyle: const TextStyle(color: Colors.black26),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF43B649),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                        decoration: _decoration(
+                          label: 'البريد  الإلكتروني ',
+                          hint: 'user@example.com',
+                          focusColor: const Color(0xFF43B649),
                         ),
                       ),
                       const SizedBox(height: 25.0),
@@ -196,143 +146,40 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         autofillHints: const [AutofillHints.newPassword],
                         validator: (value) {
                           final password = value ?? '';
-                          if (password.isEmpty) {
-                            return 'الرجاء إدخال رمز المرور';
-                          }
-                          if (password.length < 8) {
-                            return 'كلمة المرور يجب أن تكون 8 رموز على الأقل';
-                          }
-                          if (!RegExp(r'[0-9]').hasMatch(password)) {
-                            return 'كلمة المرور يجب أن تحتوي على رقم واحد على الأقل';
-                          }
-                          if (!RegExp(r'[A-Z]').hasMatch(password)) {
-                            return 'كلمة المرور يجب أن تحتوي على حرف كبير واحد على الأقل';
-                          }
-                          if (!RegExp(r'[!@#\$&*~]').hasMatch(password)) {
-                            return 'كلمة المرور يجب أن تحتوي على رمز خاص';
-                          }
+                          if (password.isEmpty) return 'الرجاء إدخال رمز المرور';
+                          if (password.length < 8) return 'كلمة المرور يجب أن تكون 8 رموز على الأقل';
+                          if (!RegExp(r'[0-9]').hasMatch(password)) return 'يجب أن تحتوي على رقم واحد على الأقل';
+                          if (!RegExp(r'[A-Z]').hasMatch(password)) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
+                          if (!RegExp(r'[!@#\$&*~]').hasMatch(password)) return 'يجب أن تحتوي على رمز خاص';
                           return null;
                         },
-                        decoration: InputDecoration(
-                          labelText: 'رمز المـرور',
-                          floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
-                              return const TextStyle(
-                                color: Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            if (states.contains(MaterialState.focused)) {
-                              return const TextStyle(
-                                color: Color(0xFF984C9D),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            return const TextStyle(color: Colors.grey);
-                          }),
-                          hintText: 'ادخـل رمز المـرور',
-                          hintStyle: const TextStyle(color: Colors.black26),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF984C9D),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                        decoration: _decoration(
+                          label: 'رمز المـرور',
+                          hint: 'ادخـل رمز المـرور',
+                          focusColor: const Color(0xFF984C9D),
                         ),
                       ),
-
                       const SizedBox(height: 20.0),
 
-                      // ✅ تأكيد كلمة المرور باللون الأزرق
+                      // تأكيد كلمة المرور (أزرق)
                       TextFormField(
                         controller: _confirmController,
                         obscureText: true,
                         obscuringCharacter: '*',
                         autofillHints: const [AutofillHints.newPassword],
-                        cursorColor: const Color(0xFF00ADE5), // الكيرسر أزرق
+                        cursorColor: const Color(0xFF00ADE5),
                         validator: (value) {
                           final confirm = value ?? '';
-                          if (confirm.isEmpty) {
-                            return 'الرجاء تأكيد رمز المرور';
-                          }
-                          if (confirm != _passwordController.text) {
-                            return 'رمز المرور غير متطابق';
-                          }
+                          if (confirm.isEmpty) return 'الرجاء تأكيد رمز المرور';
+                          if (confirm != _passwordController.text) return 'رمز المرور غير متطابق';
                           return null;
                         },
-                        decoration: InputDecoration(
-                          labelText: 'تأكيد رمز المـرور',
-                          hintText: 'أعد إدخال رمز المـرور',
-                          floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
-                              return const TextStyle(
-                                color: Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            if (states.contains(MaterialState.focused)) {
-                              return const TextStyle(
-                                color: Color(0xFF00ADE5), // أزرق عند التركيز
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            return const TextStyle(color: Colors.grey);
-                          }),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF00ADE5), // إطار أزرق
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                        decoration: _decoration(
+                          label: 'تأكيد رمز المـرور',
+                          hint: 'أعد إدخال رمز المـرور',
+                          focusColor: const Color(0xFF00ADE5),
                         ),
                       ),
-
                       const SizedBox(height: 25.0),
 
                       // زر التسجيل
@@ -343,16 +190,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             backgroundColor: lightColorScheme.primary,
                             foregroundColor: Colors.white,
                           ),
-                          onPressed: () {
-                            if (_formSignupKey.currentState!.validate()) {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const HomeShell(),
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text('انشئ الحسـاب'),
+                          onPressed: _isLoading ? null : _register, // 👈 صار يسجّل
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22, height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text('انشئ الحسـاب'),
                         ),
                       ),
                       const SizedBox(height: 30.0),
@@ -365,9 +209,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (e) => const SignInScreen(),
-                                ),
+                                MaterialPageRoute(builder: (e) => const SignInScreen()),
                               );
                             },
                             child: Text(
@@ -378,10 +220,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               ),
                             ),
                           ),
-                          const Text(
-                            ' لديـك حسـاب؟  ',
-                            style: TextStyle(color: Colors.black45),
-                          ),
+                          const Text(' لديـك حسـاب؟  ', style: TextStyle(color: Colors.black45)),
                         ],
                       ),
                       const SizedBox(height: 20.0),
@@ -393,6 +232,44 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required String hint,
+    required Color focusColor,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.black26),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(26)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Colors.black12),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: focusColor, width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Color(0xFFBA1A1A), width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Color(0xFFBA1A1A), width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      floatingLabelStyle: MaterialStateTextStyle.resolveWith((states) {
+        if (states.contains(MaterialState.error)) {
+          return const TextStyle(color: Color(0xFFBA1A1A), fontWeight: FontWeight.w600);
+        }
+        if (states.contains(MaterialState.focused)) {
+          return TextStyle(color: focusColor, fontWeight: FontWeight.w600);
+        }
+        return const TextStyle(color: Colors.grey);
+      }),
     );
   }
 }

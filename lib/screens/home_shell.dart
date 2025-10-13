@@ -43,17 +43,23 @@ class _HomeShellState extends State<HomeShell> {
         children: [
           // المحتوى
           Positioned.fill(child: _pages[_index]),
-
+  Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 20,
+      child: Container(color: Colors.white),
+    ),
           // البار السفلي — مثبت عند 0 بالضبط
           Positioned(
             left: 0,
             right: 0,
-            bottom: -16,
+            bottom: -10,
             child: MediaQuery.removePadding(
               context: context,
               removeBottom: true, // ⛔️ ألغِ أي SafeArea سفلية
               child: SizedBox(
-                height: 72,
+                height: 70,
                 child: FluidNavBar(
                   // لا تكتب const هنا لأن الألوان تعتمد على _index
                   icons: [
@@ -65,7 +71,7 @@ class _HomeShellState extends State<HomeShell> {
                       extras: const {'label': 'الرئيسية'},
                     ),
                     FluidNavBarIcon(
-                      icon: Icons.smart_toy,
+                      icon: Icons.comment_rounded,
                       backgroundColor: _index == 1 ? tabColors[1] : Colors.white,
                       selectedForegroundColor: Colors.white,
                       unselectedForegroundColor: inactive,
