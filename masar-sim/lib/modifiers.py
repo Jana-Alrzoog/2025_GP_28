@@ -68,7 +68,7 @@ def compute_demand_modifier(ts, station_key, seeds: Dict[str, Any], config: Dict
 
     multipliers  = config.get("multipliers", {}) or {}
     weather_map  = multipliers.get("weather", {}) or {}
-    events_map   = config.get("events", {}) or {}
+    events_map   = multipliers.get("events", {}) or {}
 
     # Station + relative scale
     st = _get_station(seeds, station_key)
