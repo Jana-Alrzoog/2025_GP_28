@@ -87,13 +87,18 @@ def compute_demand_modifier(ts, station_key, seeds: Dict[str, Any], config: Dict
     sid   = str(st.get("station_id", "")).upper()
     scode = str(st.get("code", "")).upper()
     event_mult = 1.0
+
     for ev in events_seed:
-        ev_station = str(
+        ev_station_raw = str(
             ev.get("station_id") or ev.get("station") or ev.get("station_code") or ""
-        ).upper()
-        if ev.get("date") == date_str and ev_station in {sid, scode}:
+        ).strip().upper()
+
+        is_citywide = ev_station_raw in {"", "ALL", "CITY", "CITYWIDE"}
+
+        if ev.get("date") == date_str and (is_citywide or ev_station_raw in {sid, scode}):
             et = ev.get("event_type", "Other")
             event_mult = max(event_mult, float(events_map.get(et, 1.0)))
+
 
     # Holiday
     holiday_mult = float(multipliers.get("holiday", 1.0))
