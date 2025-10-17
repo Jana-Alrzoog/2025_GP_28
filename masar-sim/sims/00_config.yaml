@@ -29,22 +29,15 @@ capacity:
   vip_share_min: 0.02               
   vip_share_max: 0.08             
 
-multipliers:                 
-  weekend: 0.90                 
-  holiday: 0.80                  
-  weather:
-    Sunny: 1.00
-    Cloudy: 0.95
-    Dusty: 0.85
-    Rainy: 0.70
-  events:
-    Concert: 1.5
-    Sports: 1.4
-    Expo: 1.3
-    Other: 1.1
-    CityWideBackground: 1.05       
+multipliers:
+  weekend: 0.90
+  holiday: 0.80
+  weather: { Sunny: 1.00, Cloudy: 0.95, Dusty: 0.85, Rainy: 0.70 }
+  events:  { Concert: 1.50, Sports: 1.40, Expo: 1.30, Other: 1.10, CityWideBackground: 1.05 }
+  
 
 quality_checks:              
   crowd_pct_range: [0, 100]
   occupancy_pct_range: [0, 100]
   non_negative_counts: true
+
