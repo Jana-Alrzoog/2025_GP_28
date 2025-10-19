@@ -24,7 +24,8 @@ headway:
 
 capacity:                    
   carriage_count: 4              
-  cabin_capacity_total: 557         
+  train_total_capacity: 557 
+  cabin_capacity: 139 
   vip_cabin_capacity: 139            
   vip_share_min: 0.20               
   vip_share_max: 0.35             
@@ -40,6 +41,7 @@ quality_checks:
   crowd_pct_range: [0, 100]
   occupancy_pct_range: [0, 100]
   non_negative_counts: true
+
 
 
 
