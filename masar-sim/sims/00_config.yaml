@@ -31,15 +31,16 @@ capacity:
 
 multipliers:
   weekend: 0.90
-  holiday: 0.80
+  holiday: 1.20
   weather: { Sunny: 1.00, Cloudy: 0.95, Dusty: 0.85, Rainy: 0.70 }
-  events:  { Concert: 1.50, Sports: 1.40, Expo: 1.30, Other: 1.10, CityWideBackground: 1.05 }
+  events:  { Concert: 1.40, Sports: 1.50, Expo: 1.30, Other: 1.10, CityWideBackground: 1.05 }
   
 
 quality_checks:              
   crowd_pct_range: [0, 100]
   occupancy_pct_range: [0, 100]
   non_negative_counts: true
+
 
 
 
