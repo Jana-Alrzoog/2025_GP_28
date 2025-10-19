@@ -6,8 +6,9 @@
     "type": "interchange",
     "capacity_station": 5000,
     "capacity_platform": 1500,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Blue"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Blue",
+    "served_lines": ["Blue", "Yellow", "Purple"]
   },
   {
     "station_id": "S2",
@@ -16,8 +17,9 @@
     "type": "urban",
     "capacity_station": 3000,
     "capacity_platform": 1200,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Red"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Red",
+    "served_lines": ["Red", "Blue"]
   },
   {
     "station_id": "S3",
@@ -26,8 +28,9 @@
     "type": "urban",
     "capacity_station": 2500,
     "capacity_platform": 1000,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Orange"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Orange",
+    "served_lines": ["Orange", "Blue"]
   },
   {
     "station_id": "S4",
@@ -36,8 +39,9 @@
     "type": "cultural",
     "capacity_station": 2000,
     "capacity_platform": 800,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Green"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Green",
+    "served_lines": ["Green", "Blue"]
   },
   {
     "station_id": "S5",
@@ -46,17 +50,19 @@
     "type": "airport",
     "capacity_station": 5500,
     "capacity_platform": 2000,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Yellow"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Yellow",
+    "served_lines": ["Yellow"]
   },
   {
     "station_id": "S6",
-    "code": "WEST",
+    "code": "First Industrial City",
     "name": "Western Station",
     "type": "intercity",
     "capacity_station": 5000,
     "capacity_platform": 1800,
-    "train_capacity": { "train_total": 557, "carriage_capacity": 228, "cars_per_train": 4 },
-    "line_color": "Orange"
+    "train_capacity": { "train_total": 556, "carriage_capacity": 139, "cars_per_train": 4 },
+    "line_color": "Orange",
+    "served_lines": ["Orange"]
   }
 ]
