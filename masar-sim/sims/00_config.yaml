@@ -26,8 +26,8 @@ capacity:
   carriage_count: 4              
   cabin_capacity_total: 557         
   vip_cabin_capacity: 139            
-  vip_share_min: 0.02               
-  vip_share_max: 0.08             
+  vip_share_min: 0.20               
+  vip_share_max: 0.35             
 
 multipliers:
   weekend: 0.90
@@ -40,5 +40,6 @@ quality_checks:
   crowd_pct_range: [0, 100]
   occupancy_pct_range: [0, 100]
   non_negative_counts: true
+
 
 
