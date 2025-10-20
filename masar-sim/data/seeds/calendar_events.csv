@@ -1,7 +1,7 @@
-event_id,name,type,date,stations_impacted,demand_modifier,description
+event_id,name,event_type,date,stations_impacted,demand_modifier,description
 E1,Riyadh Season Opening,Other,2025-11-01,"KAFD;Qasr Al-Hokm;National Museum",1.10,Opening of Riyadh Season increases traffic in central stations
 E2,International Conference,Other,2025-11-15,KAFD,1.10,Global conference at KAFD significantly raises passenger flow
-E3,Saudi National Day,SaudiNationalDay,2025-09-23,"Qasr Al-Hokm;National Museum;STC",1.70,National Day doubles crowd levels in downtown Riyadh
+E3,Saudi National Day,SaudiNationalDay,2025-09-23,KAFD,1.70,National Day doubles crowd levels in downtown Riyadh
 E4,Airport Travel Surge,AirportSurge,2025-12-20,Airport T1-2,1.35,End-of-year travel increases passenger demand at the airport
 E5,Western Station Expo,Expo,2025-12-05,Western Station,1.30,Expo at Western Station increases inbound and outbound traffic
 E6,Football Final at KAFD,Sports,2025-12-10,"KAFD;STC",1.50,Football championship drives high demand at stadium stations
