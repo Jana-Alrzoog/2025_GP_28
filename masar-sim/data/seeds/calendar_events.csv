@@ -1,11 +1,22 @@
 event_id,name,event_type,date,stations_impacted,demand_modifier,description
 E1,Riyadh Season Opening,Festival,9/10/2025,KAFD;Qasr Al-Hokm;National Museum,1.1,Opening of Riyadh Season increases traffic in central stations
-E2,International Conference,Conference,11/15/2025,KAFD,1.1,Global conference at KAFD significantly raises passenger flow
-E3,Saudi National Day,SaudiNationalDay,9/23/2025,KAFD;Qasr Al-Hokm;National Museum,1.7,National Day doubles crowd levels in downtown Riyadh
-E4,Airport Travel Surge,AirportSurge,12/20/2025,Airport T1-2,1.35,End-of-year travel increases passenger demand at the airport
-E5,Western Station Expo,Expo,12/5/2025,Western Station,1.3,Expo at Western Station increases inbound and outbound traffic
 E6,Football Final at Arena,Sports,9/17/2025,Qasr Al-Hokm;STC,1.5,Football championship drives high demand at stadium stations
+E11,Saudi National Day,NationalHoliday,9/23/2025,KAFD;Qasr Al-Hokm;National Museum;STC;Western Station;Airport T1-2,1.8,National holiday with major city-wide celebrations
+E12,Riyadh Season Opening,Festival,10/1/2025,KAFD;Qasr Al-Hokm;National Museum,1.3,Start of Riyadh Season attracting large downtown crowds
+E13,LEAP Tech Conference,Conference,10/20/2025,KAFD;STC,1.5,Global technology event attracting business and tech professionals
+E14,Book Fair Riyadh,Exhibition,11/10/2025,National Museum;Qasr Al-Hokm,1.4,Annual international book fair at National Museum area
+E2,International Conference,Conference,11/15/2025,KAFD,1.1,Global conference at KAFD significantly raises passenger flow
 E7,Book Fair at National Museum,Exhibition,11/20/2025,National Museum,1.1,Annual book fair attracts cultural visitors to the museum area
 E8,Business Summit,Conference,11/25/2025,KAFD;STC,1.1,Business leaders summit raises daily demand in business hubs
-E9,Winter Travel Rush,AirportSurge,12/28/2025,Airport T1-2;Western Station,1.35,Heavy travel activity before New Year increases load
+E15,Gamers8 Finale,Festival,11/25/2025,KAFD;STC,1.3,Closing event of Gamers8 draws youth and international visitors
 E10,Music Festival,Concert,11/30/2025,STC;Qasr Al-Hokm,1.4,Music festival in downtown attracts thousands of attendees
+E5,Western Station Expo,Expo,12/5/2025,Western Station,1.3,Expo at Western Station increases inbound and outbound traffic
+E16,Winter at Tantora,Festival,12/15/2025,Western Station;Airport T1-2,1.25,Tourism season connecting visitors from airport to northbound routes
+E4,Airport Travel Surge,AirportSurge,12/20/2025,Airport T1-2,1.35,End-of-year travel increases passenger demand at the airport
+E9,Winter Travel Rush,AirportSurge,12/28/2025,Airport T1-2;Western Station,1.35,Heavy travel activity before New Year increases load
+E17,New Year Eve Celebration,Holiday,12/31/2025,Qasr Al-Hokm;STC,1.5,Downtown New Year festivities cause crowd surge
+E18,Founding Day,NationalHoliday,1/22/2026,KAFD;Qasr Al-Hokm;National Museum,1.6,Saudi Founding Day with national celebrations
+E19,Riyadh International Coffee Exhibition,Exhibition,2/10/2026,Western Station;STC,1.2,Specialty coffee expo brings local and international visitors
+E20,Dates Festival,Festival,2/20/2026,Qasr Al-Hokm;National Museum,1.3,Annual festival celebrating Saudi date culture and products
+E21,Saudi Food Show,Exhibition,3/12/2026,KAFD;Western Station,1.2,International food industry exhibition draws professionals and tourists
+E22,Riyadh Marathon,Sports,3/20/2026,STC;Qasr Al-Hokm;Western Station,1.4,City marathon affecting central and southern lines
