@@ -1,0 +1,67 @@
+{
+  "routes": [
+    {
+      "line_id": "Blue",
+      "direction_id": 0,
+      "stations": ["KAFD", "STC", "MUSEUM", "QASR"],
+      "dwell_sec": 45,
+      "travel_sec": [360, 480, 360]
+    },
+    {
+      "line_id": "Blue",
+      "direction_id": 1,
+      "stations": ["QASR", "MUSEUM", "STC", "KAFD"],
+      "dwell_sec": 45,
+      "travel_sec": [360, 480, 360]
+    },
+    {
+      "line_id": "Yellow",
+      "direction_id": 0,
+      "stations": ["AIRP_T12", "KAFD"],
+      "dwell_sec": 45,
+      "travel_sec": [1200]
+    },
+    {
+      "line_id": "Yellow",
+      "direction_id": 1,
+      "stations": ["KAFD", "AIRP_T12"],
+      "dwell_sec": 45,
+      "travel_sec": [1200]
+    },
+    {
+      "line_id": "Orange",
+      "direction_id": 0,
+      "stations": ["First Industrial City", "QASR"],
+      "dwell_sec": 45,
+      "travel_sec": [960]
+    },
+    {
+      "line_id": "Orange",
+      "direction_id": 1,
+      "stations": ["QASR", "First Industrial City"],
+      "dwell_sec": 45,
+      "travel_sec": [960]
+    },
+    {
+      "line_id": "Green",
+      "direction_id": 0,
+      "stations": ["MUSEUM"],
+      "dwell_sec": 0,
+      "travel_sec": []
+    },
+    {
+      "line_id": "Purple",
+      "direction_id": 0,
+      "stations": ["KAFD"],
+      "dwell_sec": 0,
+      "travel_sec": []
+    },
+    {
+      "line_id": "Red",
+      "direction_id": 0,
+      "stations": ["STC"],
+      "dwell_sec": 0,
+      "travel_sec": []
+    }
+  ]
+}
