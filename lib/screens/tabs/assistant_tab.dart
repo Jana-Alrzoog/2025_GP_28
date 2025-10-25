@@ -13,9 +13,7 @@ class _AssistantTabState extends State<AssistantTab> {
     _Msg(text: 'أهلًا! كيف أقدر أساعدك اليوم؟', fromBot: true),
   ];
 
-  // ارتفاع شريط الإدخال + مسافة بسيطة
   static const double _inputBarHeight = 68;
-  static const double _inputBarBottomLift = 8; // ← يرفع الشريط شوي
 
   @override
   void dispose() {
@@ -33,14 +31,12 @@ class _AssistantTabState extends State<AssistantTab> {
       _controller.clear();
     });
 
-    // سكرول لأسفل
     _scroll.animateTo(
       _scroll.position.maxScrollExtent + 120,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
 
-    // رد تجريبي من البوت
     Future.delayed(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       setState(() {
@@ -58,7 +54,7 @@ class _AssistantTabState extends State<AssistantTab> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        /// قائمة الرسائل – نضيف padding سُفلي يساوي ارتفاع شريط الإدخال
+        // 🗨️ قائمة الرسائل
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, _inputBarHeight + 16),
           child: ListView.builder(
@@ -68,18 +64,18 @@ class _AssistantTabState extends State<AssistantTab> {
           ),
         ),
 
-        /// شريط الكتابة – مثبت بأسفل الشاشة ومرفوع شوي
+        // 💬 شريط الكتابة المرتفع
         Positioned(
           left: 0,
           right: 0,
-          bottom: 49, // ← ارفعه/نزّله بتغيير هذه القيمة
+          bottom: 80, // ✅ رفع الشريط فعليًا للأعلى
           child: SafeArea(
             top: false,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Material(
-                elevation: 2,
-                borderRadius: BorderRadius.circular(14),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(16),
                 color: Colors.white,
                 child: Container(
                   height: _inputBarHeight,
@@ -109,9 +105,10 @@ class _AssistantTabState extends State<AssistantTab> {
                         onPressed: _send,
                         style: ButtonStyle(
                           backgroundColor: WidgetStateProperty.all(
-                              const Color.fromRGBO(59, 59, 59, 1)),
+                            const Color.fromRGBO(59, 59, 59, 1),
+                          ),
                           foregroundColor:
-                              WidgetStateProperty.all(Colors.white),
+                          WidgetStateProperty.all(Colors.white),
                           shape: WidgetStateProperty.all(const CircleBorder()),
                         ),
                         icon: const Icon(Icons.send),
@@ -170,7 +167,10 @@ class _ChatBubble extends StatelessWidget {
               )
             ],
           ),
-          child: Text(msg.text, style: TextStyle(color: fg, height: 1.4)),
+          child: Text(
+            msg.text,
+            style: TextStyle(color: fg, height: 1.4),
+          ),
         ),
       ],
     );

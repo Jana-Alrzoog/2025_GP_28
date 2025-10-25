@@ -55,27 +55,48 @@ class WelcomeScreen extends StatelessWidget {
               ),
             ),
           ),
+
+          // ===== الأزرار السفلية =====
           Flexible(
             flex: 1,
             child: Align(
               alignment: Alignment.bottomRight,
-              child: Row(
+              child: Stack(
                 children: [
-                  const Expanded(
-                    child: WelcomeButton(
-                      buttonText: 'تسجيـل الدخـول',
-                      onTap: SignInScreen(),
-                      color: Colors.white,
-                      textColor: Color.fromARGB(255, 59, 59, 59),
-                    ),
+                  // 🔹 الخلفية البيضاء الممتدة تحت الأسود
+                  Positioned.fill(
+                    child: Container(color: Colors.white),
                   ),
-                  Expanded(
-                    child: WelcomeButton(
-                      buttonText: 'إنشـاء حسـاب',
-                      onTap: SignUpScreen(),
-                      color: Color.fromARGB(255, 59, 59, 59),
-                      textColor: Colors.white,
-                    ),
+
+                  // 🔹 الأزرار
+                  Row(
+                    children: [
+                      // ✅ الزر الأبيض مع إعادة الانحناء لليسار
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(40),
+                            bottomLeft: Radius.circular(40),
+                          ),
+                          child: const WelcomeButton(
+                            buttonText: 'تسجيـل الدخـول',
+                            onTap: SignInScreen(),
+                            color: Colors.white,
+                            textColor: Color.fromARGB(255, 59, 59, 59),
+                          ),
+                        ),
+                      ),
+
+                      // 🔹 الزر الأسود بدون تغيير
+                      const Expanded(
+                        child: WelcomeButton(
+                          buttonText: 'إنشـاء حسـاب',
+                          onTap: SignUpScreen(),
+                          color: Color.fromARGB(255, 59, 59, 59),
+                          textColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

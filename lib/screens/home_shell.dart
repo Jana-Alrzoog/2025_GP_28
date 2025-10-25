@@ -25,7 +25,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     // ألوان التبويبات عند التفعيل
     const tabColors = [
-      Color.fromRGBO(0, 173, 229, 1), // الرئيسية (برتقالي)
+      Color.fromRGBO(209, 32, 39, 1.0), // الرئيسية (برتقالي)
       Color(0xFF43B649), // المساعد (أخضر)
       Color(0xFF984C9D), // الملف (بنفسجي)
     ];
@@ -36,20 +36,20 @@ class _HomeShellState extends State<HomeShell> {
       extendBody: true,
       backgroundColor: const Color(0xFFF5F5F5),
 
-    
+
 
       // نستخدم Stack حتى نثبت البار بأسفل الشاشة بدون أي فراغ
       body: Stack(
         children: [
           // المحتوى
           Positioned.fill(child: _pages[_index]),
-  Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: 20,
-      child: Container(color: Colors.white),
-    ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 20,
+            child: Container(color: Colors.white),
+          ),
           // البار السفلي — مثبت عند 0 بالضبط
           Positioned(
             left: 0,
