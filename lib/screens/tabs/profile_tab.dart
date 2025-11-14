@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/signin_screen.dart'; // المسار الصحيح إلى صفحة تسجيل الدخول
-
+import '/services/location_service.dart';
+import 'package:geolocator/geolocator.dart';
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
@@ -301,7 +302,7 @@ class _ProfileTabState extends State<ProfileTab> {
               childAspectRatio: 1.5,
               children: [
                 _ToggleTile(title: 'الإشعارات'),
-                _ToggleTile(title: 'الخصوصية'),
+               const _LocationToggleTile(),
                 _Tile(
                   title: 'تسجيل خروج',
                   icon: Icons.logout,
@@ -368,6 +369,100 @@ class _ToggleTileState extends State<_ToggleTile> {
     );
   }
 }
+
+class _LocationToggleTile extends StatefulWidget {
+  const _LocationToggleTile({super.key});
+
+  @override
+  State<_LocationToggleTile> createState() => _LocationToggleTileState();
+}
+
+class _LocationToggleTileState extends State<_LocationToggleTile> {
+  bool _isOn = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPref();
+  }
+
+  Future<void> _loadPref() async {
+    final v = await LocationService.getUseLocation();
+    if (!mounted) return;
+    setState(() {
+      _isOn = v;
+      _loading = false;
+    });
+  }
+
+  Future<void> _onChanged(bool value) async {
+    if (!value) {
+      await LocationService.setUseLocation(false);
+      if (!mounted) return;
+      setState(() => _isOn = false);
+      return;
+    }
+
+    final perm = await LocationService.requestPermission();
+    final granted = perm == LocationPermission.always ||
+        perm == LocationPermission.whileInUse;
+
+    if (!granted) {
+      await LocationService.setUseLocation(false);
+      if (!mounted) return;
+      setState(() => _isOn = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('لم يتم منح صلاحية الموقع من النظام. فعّلها من إعدادات الجهاز.'),
+        ),
+      );
+      return;
+    }
+
+    await LocationService.setUseLocation(true);
+    if (!mounted) return;
+    setState(() => _isOn = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Switch(
+              value: _isOn,
+              onChanged: _onChanged,
+              activeColor: const Color(0xFF964C9B),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'مشاركة الموقع', // 👈 اسم الكرت
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 // ===== 🔘 المربعات العادية =====
 class _Tile extends StatelessWidget {

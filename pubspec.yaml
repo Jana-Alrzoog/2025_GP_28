@@ -38,6 +38,8 @@ dependencies:
   fluid_bottom_nav_bar: ^1.4.0
   bottom_bar_with_sheet: ^2.4.0
   turf: ^0.0.9
+  shared_preferences: ^2.3.2
+  geolocator: ^13.0.1
   
   
   # The following adds the Cupertino Icons font to your application.
@@ -74,7 +76,7 @@ flutter:
 
   assets:
    - assets/images/
-   
+   - assets/data/station_id_map.json
    - assets/images/MasarLogo.png
    - assets/data/riyadh_boundary.geojson
    - assets/data/metro_stations.json

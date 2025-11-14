@@ -17,13 +17,48 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formSignupKey = GlobalKey<FormState>();
 
-  // 🔹 مضاف: متحكمات الاسم+الايميل+الباسورد+التأكيد
-  final _nameController    = TextEditingController();
-  final _emailController   = TextEditingController();
+  // متحكمات الحقول
+  final _nameController     = TextEditingController();
+  final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController  = TextEditingController();
 
+  // 🔎 فوكس لحقل الباسورد لعرض/إخفاء قواعد الباسورد فقط عند الضغط عليه
+  final FocusNode _pwFocusNode = FocusNode();
+  bool _showPwRules = false;
+
   bool _isLoading = false;
+
+  // ✅ حالات تحقق شروط كلمة المرور (تتحدث لحظيًا)
+  bool _pwHasMinLen = false;
+  bool _pwHasDigit  = false;
+  bool _pwHasUpper  = false;
+  bool _pwHasLower  = false; // 👈 جديد: حرف صغير
+  bool _pwHasSpecial= false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_updatePasswordRules);
+
+    // تحديث حالة إظهار القواعد بناءً على تركيز الحقل
+    _pwFocusNode.addListener(() {
+      setState(() {
+        _showPwRules = _pwFocusNode.hasFocus;
+      });
+    });
+  }
+
+  void _updatePasswordRules() {
+    final p = _passwordController.text;
+    setState(() {
+      _pwHasMinLen  = p.length >= 8;
+      _pwHasDigit   = RegExp(r'[0-9\u0660-\u0669]').hasMatch(p); // يدعم 0-9 والأرقام العربية
+      _pwHasUpper   = RegExp(r'[A-Z]').hasMatch(p);
+      _pwHasLower   = RegExp(r'[a-z]').hasMatch(p);              // 👈 جديد
+      _pwHasSpecial = RegExp(r'[!@#\$&*~]').hasMatch(p);
+    });
+  }
 
   @override
   void dispose() {
@@ -31,8 +66,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
+    _pwFocusNode.dispose();
     super.dispose();
   }
+
+  // ✅ دالة فحص الباسورد الموحّدة (تستخدمها الـ validator)
+  String? _passwordValidator(String? value) {
+    final password = value ?? '';
+    if (password.isEmpty) return 'الرجاء إدخال رمز المرور';
+    if (!_pwHasMinLen)   return 'كلمة المرور يجب أن تكون 8 رموز على الأقل';
+    if (!_pwHasDigit)    return 'يجب أن تحتوي على رقم واحد على الأقل';
+    if (!_pwHasUpper)    return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
+    if (!_pwHasLower)    return 'يجب أن تحتوي على حرف صغير واحد على الأقل'; // 👈 جديد
+    if (!_pwHasSpecial)  return 'يجب أن تحتوي على رمز خاص (! @ # \$ & * ~)';
+    return null;
+  }
+
+  // ✅ فحص الاسم: حروف عربي/إنجليزي + أرقام (تشمل الأرقام العربية) + مسافات فقط
+  final RegExp _nameAllowed = RegExp(r'^[a-zA-Z\u0621-\u064A0-9\u0660-\u0669\s]+$');
 
   Future<void> _register() async {
     if (!_formSignupKey.currentState!.validate()) return;
@@ -106,20 +157,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                       // الاسم
                       TextFormField(
-                        controller: _nameController, // 👈 مضاف
-                        validator: (value) =>
-                            (value == null || value.isEmpty) ? 'الاســم مطلوب' : null,
+                        controller: _nameController,
+                        validator: (value) {
+                          final v = (value ?? '').trim();
+                          if (v.isEmpty) return 'الاســم مطلوب';
+                          if (!_nameAllowed.hasMatch(v)) {
+                            return 'الاسم يجب أن يحتوي على حروف عربي/إنجليزي وأرقام فقط';
+                          }
+                          return null;
+                        },
                         decoration: _decoration(
                           label: 'الاســم',
                           hint: 'ادخـل اسمـك',
                           focusColor: const Color(0xFFF68D39),
                         ),
-                      ), 
+                      ),
                       const SizedBox(height: 25.0),
 
                       // الايميل
                       TextFormField(
-                        controller: _emailController, // 👈 مضاف
+                        controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         validator: (value) {
@@ -141,24 +198,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       // كلمة المرور
                       TextFormField(
                         controller: _passwordController,
+                        focusNode: _pwFocusNode,
                         obscureText: true,
                         obscuringCharacter: '*',
                         autofillHints: const [AutofillHints.newPassword],
-                        validator: (value) {
-                          final password = value ?? '';
-                          if (password.isEmpty) return 'الرجاء إدخال رمز المرور';
-                          if (password.length < 8) return 'كلمة المرور يجب أن تكون 8 رموز على الأقل';
-                          if (!RegExp(r'[0-9]').hasMatch(password)) return 'يجب أن تحتوي على رقم واحد على الأقل';
-                          if (!RegExp(r'[A-Z]').hasMatch(password)) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
-                          if (!RegExp(r'[!@#\$&*~]').hasMatch(password)) return 'يجب أن تحتوي على رمز خاص';
-                          return null;
-                        },
+                        validator: _passwordValidator, // ✅ يستخدم نفس الشروط
+                        onChanged: (_) => _updatePasswordRules(), // للتأكيد
+                        onTap: () => setState(() => _showPwRules = true), // إظهار القواعد عند الضغط
                         decoration: _decoration(
                           label: 'رمز المـرور',
                           hint: 'ادخـل رمز المـرور',
                           focusColor: const Color(0xFF984C9D),
                         ),
                       ),
+
+                      // ✅ قائمة شروط كلمة المرور التفاعلية — تظهر فقط عند الضغط/التركيز على الحقل
+                      if (_showPwRules) ...[
+                        const SizedBox(height: 12.0),
+                        _PasswordRules(
+                          hasMinLen: _pwHasMinLen,
+                          hasDigit: _pwHasDigit,
+                          hasUpper: _pwHasUpper,
+                          hasLower: _pwHasLower,    // 👈 جديد
+                          hasSpecial: _pwHasSpecial,
+                        ),
+                      ],
+
                       const SizedBox(height: 20.0),
 
                       // تأكيد كلمة المرور (أزرق)
@@ -190,7 +255,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             backgroundColor: lightColorScheme.primary,
                             foregroundColor: Colors.white,
                           ),
-                          onPressed: _isLoading ? null : _register, // 👈 صار يسجّل
+                          onPressed: _isLoading ? null : _register,
                           child: _isLoading
                               ? const SizedBox(
                                   width: 22, height: 22,
@@ -270,6 +335,53 @@ class _SignUpScreenState extends State<SignUpScreen> {
         }
         return const TextStyle(color: Colors.grey);
       }),
+    );
+  }
+}
+
+/// ✅ ويدجت تعرض شروط كلمة المرور مع أيقونة حيّة
+class _PasswordRules extends StatelessWidget {
+  final bool hasMinLen;
+  final bool hasDigit;
+  final bool hasUpper;
+  final bool hasLower;  // 👈 جديد
+  final bool hasSpecial;
+
+  const _PasswordRules({
+    required this.hasMinLen,
+    required this.hasDigit,
+    required this.hasUpper,
+    required this.hasLower,
+    required this.hasSpecial,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.3);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ruleRow('٨ رموز فأكثر', hasMinLen, style: textStyle),
+        _ruleRow('رقم واحد على الأقل', hasDigit, style: textStyle),
+        _ruleRow('حرف كبير واحد على الأقل (A-Z)', hasUpper, style: textStyle),
+        _ruleRow('حرف صغير واحد على الأقل (a-z)', hasLower, style: textStyle), // 👈 جديد
+        _ruleRow('رمز خاص واحد على الأقل (! @ # \$ & * ~)', hasSpecial, style: textStyle),
+      ],
+    );
+  }
+
+  Widget _ruleRow(String text, bool ok, {TextStyle? style}) {
+    final color = ok ? const Color(0xFF2E7D32) : Colors.black38; // أخضر إذا تحقق
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: color),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: style?.copyWith(color: color))),
+        ],
+      ),
     );
   }
 }
