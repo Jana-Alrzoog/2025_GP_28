@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/services/location_service.dart'; 
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 
 
@@ -40,6 +41,9 @@ String norm(String s) {
   t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
   return t;
 }
+
+// Base URL for Masar snapshot API (FastAPI on Render)
+const String kMasarApiBaseUrl = "https://masar-sim.onrender.com";
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -1253,46 +1257,204 @@ class _StationSheet extends StatelessWidget {
     );
   }
 }
-
-class _CrowdStatusWidget extends StatelessWidget {
+class _CrowdStatusWidget extends StatefulWidget {
   final String? stationId;
 
   const _CrowdStatusWidget({required this.stationId});
 
   @override
-  Widget build(BuildContext context) {
-   final now = DateTime.now();
-    final rnd = Random(now.millisecondsSinceEpoch);
-    final currentIdx = rnd.nextInt(3);
-    final futureIdx = (currentIdx + 1) % 3;
-    const labels = ['سلس', 'متوسط', 'مزدحم'];
-    const colors = [Colors.green, Colors.orange, Colors.red];
+  State<_CrowdStatusWidget> createState() => _CrowdStatusWidgetState();
+}
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _crowdRow(
-            title: 'الحالية:',
-            color: colors[currentIdx],
-            label: labels[currentIdx],
+class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
+    with SingleTickerProviderStateMixin {
+  bool _loading = true;
+  String? _error;
+  String? _crowdLevel; // Low / Medium / High / Extreme
+
+  late final AnimationController _dotCtrl;
+  late final Animation<double> _dotScale;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // أنيميشن نبض بسيط للدائرة
+    _dotCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _dotScale = Tween<double>(begin: 1.0, end: 1.4).animate(
+      CurvedAnimation(parent: _dotCtrl, curve: Curves.easeOut),
+    );
+    _dotCtrl.repeat(reverse: true);
+
+    _fetchSnapshot();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CrowdStatusWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stationId != widget.stationId) {
+      _fetchSnapshot();
+    }
+  }
+
+  @override
+  void dispose() {
+    _dotCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchSnapshot() async {
+    final sid = widget.stationId;
+
+    if (sid == null || sid.trim().isEmpty) {
+      setState(() {
+        _loading = false;
+        _error = 'لا يوجد معرّف لهذه المحطة.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      // ✅ الرابط الصحيح حسب المحطة
+      final url = Uri.parse('https://masar-sim.onrender.com/snapshot/$sid');
+      final res = await http.get(url);
+
+      if (res.statusCode != 200) {
+        setState(() {
+          _loading = false;
+          _error = 'تعذّر تحميل حالة الازدحام (كود ${res.statusCode}).';
+        });
+        return;
+      }
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+
+      setState(() {
+        _crowdLevel = (data['crowd_level'] as String?) ?? 'Medium';
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _error = 'حدث خطأ أثناء الاتصال بالخادم.';
+      });
+    }
+  }
+
+  // ترجمة الحالة للعربي
+  String _arabicLabel(String level) {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return 'سلس';
+      case 'medium':
+        return 'متوسط';
+      case 'high':
+        return 'مزدحم';
+      case 'extreme':
+        return 'مزدحم جدًا';
+      default:
+        return 'غير معروف';
+    }
+  }
+
+  // لون كل حالة
+  Color _colorForLevel(String level) {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'high':
+        return Colors.red;
+      case 'extreme':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // الدائرة النابضة
+  Widget _pulsingDot(Color color) {
+  return SizedBox(
+    width: 18,
+    height: 18,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        // التوهج الخلفي — أصغر وأخف
+        ScaleTransition(
+          scale: Tween<double>(begin: 1.0, end: 1.5).animate(
+            CurvedAnimation(
+              parent: _dotCtrl,
+              curve: Curves.easeOut,
+            ),
           ),
-          const SizedBox(height: 12),
-          _crowdRow(
-            title: 'المتوقعة بعد 30 دقيقة:',
-            color: colors[futureIdx],
-            label: labels[futureIdx],
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.18),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+
+        // النقطة الأساسية — أصغر + ظل أنعم
+        ScaleTransition(
+          scale: _dotScale,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.5),
+                  blurRadius: 4,
+                  spreadRadius: 0.5,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  // الكبسولة (نفس شكل كودك القديم، بس مع النبض)
+  Widget _pill(Color color, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _pulsingDot(color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
   }
 
+  // نفس فكرة _crowdRow اللي عندك، لكن نستخدم _pill مع النبض
   Widget _crowdRow({
     required String title,
     required Color color,
@@ -1310,36 +1472,76 @@ class _CrowdStatusWidget extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
+        _pill(color, label),
       ],
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+
+    final level = _crowdLevel ?? 'Medium';
+    final currentColor = _colorForLevel(level);
+    final currentLabel = _arabicLabel(level);
+
+    // مؤقتاً: التوقع = نفس الحالة الحالية (لين تربطين مودل التوقع)
+    final futureColor = currentColor;
+    final futureLabel = currentLabel;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // نفس صفّك القديم
+          _crowdRow(
+            title: 'الحالية:',
+            color: currentColor,
+            label: currentLabel,
+          ),
+          const SizedBox(height: 12),
+          _crowdRow(
+            title: 'المتوقعة بعد 30 دقيقة:',
+            color: futureColor,
+            label: futureLabel,
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+
+
 
 class _ScheduleWidget extends StatelessWidget {
   final String stationName;
