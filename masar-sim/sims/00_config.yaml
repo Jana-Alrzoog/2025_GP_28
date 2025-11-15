@@ -1,37 +1,46 @@
-start_date: 2025-10-05      
+start_date: 2025-07-01
 tz: Asia/Riyadh
 minute_resolution: 1
 
 date_range:
-  start: 2025-10-05           
-  end:   2025-12-31           
+  start: 2025-07-01
+  end:   2026-07-31
 
 output_partitioning: monthly
 
 random_seed: 20251007
 
 operation:
-  start_hour: 6             
-  hours_per_day: 18          
+  start_hour: 6
+  hours_per_day: 18
 
-peaks:                      
-  - {hour: 8,  sigma_hours: 0.75}
-  - {hour: 18, sigma_hours: 0.85}
+# Base-day demand shape
+baseline: 0.05         # small demand throughout the day
+global_scale: 3.0      # enlarge overall demand levels
 
-headway:                    
-  peak_pattern:    [7, 7, 6, 8]     
-  offpeak_pattern: [11, 10, 12, 11]  
+peaks:
+  # Strong peaks (morning & evening)
+  - {hour: 8,  sigma_hours: 0.75, weight: 1.8}
+  - {hour: 18, sigma_hours: 0.85, weight: 1.8}
 
-capacity:                    
-  carriage_count: 4              
-  train_total_capacity: 557 
-  cabin_capacity: 139 
-  vip_cabin_capacity: 139            
-  vip_share_min: 0.20               
-  vip_share_max: 0.35             
+  # Lighter peaks (noon & afternoon)
+  - {hour: 12, sigma_hours: 0.70, weight: 1.3}
+  - {hour: 16, sigma_hours: 0.70, weight: 1.3}
+
+headway:
+  peak_pattern:    [7, 7, 6, 8]
+  offpeak_pattern: [11, 10, 12, 11]
+
+capacity:
+  carriage_count: 4
+  train_total_capacity: 557
+  cabin_capacity: 139
+  vip_cabin_capacity: 139
+  vip_share_min: 0.20
+  vip_share_max: 0.35
 
 multipliers:
-  weekend: 0.90
+  weekend: 0.90      
   holiday: 1.20
 
   weather:
@@ -50,14 +59,7 @@ multipliers:
     CityWideBackground: 1.05
     Other: 1.10
 
-
-quality_checks:              
+quality_checks:
   crowd_pct_range: [0, 100]
   occupancy_pct_range: [0, 100]
   non_negative_counts: true
-
-
-
-
-
-
