@@ -1,5 +1,9 @@
 # server.py
 # FastAPI server for Masar Digital Twin Snapshot Generator
+import os
+import joblib
+import pandas as pd
+from pydantic import BaseModel
 
 from datetime import datetime
 from typing import Dict
@@ -87,3 +91,4 @@ def snapshot_station(station_id: str) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
