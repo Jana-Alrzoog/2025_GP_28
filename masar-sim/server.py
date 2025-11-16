@@ -84,7 +84,7 @@ def predict_30min(req: CrowdRequest):
     y_pred = xgb_model.predict(row)[0]
 
     return {
-        "crowd_level_30min": int(y_pred)  # مثال: 0=Low,1=Med,2=High,3=Extreme حسب تدريبك
+        "crowd_level_30min": int(y_pred)  
     }
 # ------------------------------------------------------------
 # Enable CORS so the Flutter mobile app can access the API
@@ -150,6 +150,7 @@ def snapshot_station(station_id: str) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 
