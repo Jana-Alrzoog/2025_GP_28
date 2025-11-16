@@ -6,4 +6,9 @@ pyyaml
 pydantic
 joblib
 xgboost
+firebase-admin
+google-cloud-firestore
+
+
+
 
