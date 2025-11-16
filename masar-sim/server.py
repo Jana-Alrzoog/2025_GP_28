@@ -17,7 +17,7 @@ from sim_core import (
     RIYADH_TZ,
     generate_all_stations_snapshot,
     make_snapshot_for_station,
-    get_capacity,           # ✨ جديد
+    get_capacity,        
     classify_from_cap,  
 )
 
@@ -96,25 +96,18 @@ class CrowdRequest(BaseModel):
 
 @app.post("/predict_30min")
 def predict_30min(req: CrowdRequest):
-    # 1) تجهيز الداتا للموديل بنفس ترتيب FEATURES
     row = pd.DataFrame([req.dict()])[FEATURES]
 
-    # 2) الموديل يتوقع عدد الركاب بعد 30 دقيقة (regression)
     y_pred = float(xgb_model.predict(row)[0])
-    predicted_total = max(0.0, y_pred)  # نتأكد ما تكون سالبة
+    predicted_total = max(0.0, y_pred)  
 
-    # 3) نحول station_id الرقمي إلى كود المحطة في السيميوليتر
-    #    لو تدريبك يستخدم mapping مختلف (مثلاً 0..5)، نعدله هنا
-    station_code = f"S{req.station_id}"   # مثال: 1 -> "S1", 2 -> "S2", ...
+    station_code = f"S{req.station_id}"  
 
-    # 4) نجيب سعة المحطة من sim_core (نفس get_capacity اللي في الكود اللي أرسلتيه)
     capacity = get_capacity(station_code)
 
-    # 5) نستخدم نفس منطق classify_from_cap من السيميوليتر
     level_text, ratio = classify_from_cap(predicted_total, capacity)
     level_code = LEVEL_TO_INT[level_text]
 
-    # 6) نرجّع النتيجة للـ Flutter
     return {
         "station_id_ml": req.station_id,          
         "station_id": station_code,              
@@ -189,6 +182,7 @@ def snapshot_station(station_id: str) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 
