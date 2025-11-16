@@ -31,10 +31,16 @@ app = FastAPI(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ../models/masar_xgb_30min_model.pkl
-MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "masar_xgb_30min_model.pkl")
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "..",
+    "masar_forecasting",
+    "models",
+    "masar_xgb_30min_model.pkl",
+)
 
 xgb_model = joblib.load(MODEL_PATH)
+
 
 FEATURES = [
     "hour",
@@ -150,6 +156,7 @@ def snapshot_station(station_id: str) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 
