@@ -120,7 +120,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       case 'high':
         return Colors.red;
       case 'extreme':
-        return Colors.redAccent;
+        return const Color.fromARGB(255, 122, 0, 0);
       default:
         return Colors.grey;
     }
