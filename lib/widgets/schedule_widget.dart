@@ -88,13 +88,40 @@ class ScheduleWidget extends StatelessWidget {
     }
     return null;
   }
+bool _isTerminalHere({
+  String? destCode,
+  String? destName,
+}) {
+  final currentId = stationId.trim().toUpperCase();
 
-  bool _isTerminalHere(String? destName) {
-    if (destName == null || destName.trim().isEmpty) return false;
-    final nd = norm(destName);
-    final ns = norm(stationName);
-    return nd == ns;
+  // 1) مقارنة بالكود مباشرة
+  if (destCode != null &&
+      destCode.trim().isNotEmpty &&
+      destCode.trim().toUpperCase() == currentId) {
+    return true;
   }
+
+  // 2) مقارنة بأسماء المحطة من الـ stationIdMap
+  final mapping = stationIdMap[currentId];
+  if (mapping != null && mapping.trim().isNotEmpty && destName != null) {
+    final nd = norm(destName);
+    for (final v in mapping.split('/')) {
+      final vv = v.trim();
+      if (vv.isEmpty) continue;
+      if (nd == norm(vv)) {
+        return true;
+      }
+    }
+  }
+
+  // 3) fallback: مقارنة بالاسم المباشر (نادرًا نحتاجه)
+  if (destName != null &&
+      norm(destName) == norm(stationName)) {
+    return true;
+  }
+
+  return false;
+}
 
   Widget _scheduleRow({
     required int i,
@@ -326,9 +353,9 @@ class ScheduleWidget extends StatelessWidget {
                       _resolveEndName(code) ?? 'وجهة غير معروفة';
 
                   // لو الوجهة هي نفس المحطة ما نعرض الصف
-                  if (_isTerminalHere(destName)) {
-                    return const SizedBox.shrink();
-                  }
+                 if (_isTerminalHere(destCode: code, destName: destName)) {
+                  return const SizedBox.shrink();
+                }
 
                   return InkWell(
                     onTap: () {
