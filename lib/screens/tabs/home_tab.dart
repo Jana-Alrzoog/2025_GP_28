@@ -1,4 +1,4 @@
-// lib/home_tab.dart
+// lib/screens/tabs/home_tab.dart
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '/services/location_service.dart'; 
+import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
-
+import 'train_carriage_view.dart';
 
 /// دالة تطبيع نص (AR/EN) لنجاح المطابقة بين أسماء المحطات وملف station_id_map.json
 String norm(String s) {
@@ -90,7 +90,7 @@ class _HomeTabState extends State<HomeTab> {
   _Station? _selectedStation;
   bool _sheetOpen = false;
 
-  // خريطة ربط station_id بالأسماء (قد تكون ID->Name أو Name->ID)
+  // خريطة ربط station_id بالأسماء
   Map<String, String> _stationIdMap = {};
 
   static const Color _blueHex = Color(0xFF00ADE5);
@@ -104,42 +104,32 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadStationIdMap();
-   
   }
-   Future<void> _handleLocationOnFirstOpen() async {
+
+  Future<void> _handleLocationOnFirstOpen() async {
     final useLoc = await LocationService.getUseLocation();
     final hasAsked = await LocationService.getHasAsked();
     if (!mounted) return;
 
-    // لو قد سألناه قبل
     if (hasAsked) {
-      // احترم الإعداد الحالي
       setState(() => _useLocation = useLoc);
-
-      // لو المستخدم مطفّي استخدام الموقع من صفحة الحساب → لا نسأل ولا نطلب صلاحية
       if (!useLoc) return;
     } else {
-      // أول مرة نسأل المستخدم
       final allow = await _showLocationDialog(context);
-
-      // نخزّن إننا سألناه مرة
       await LocationService.setHasAsked(true);
 
       if (!allow) {
-        // رفض من الدايالوج → نخزّن false ومانسوي شيء
         await LocationService.setUseLocation(false);
         if (!mounted) return;
         setState(() => _useLocation = false);
         return;
       }
 
-      // وافق من الدايالوج → نخزّن true
       await LocationService.setUseLocation(true);
       if (!mounted) return;
       setState(() => _useLocation = true);
     }
 
-    // هنا نجي لطلب صلاحية النظام (بس إذا الإعداد النهائي true)
     final perm = await LocationService.requestPermission();
     if (perm == LocationPermission.always ||
         perm == LocationPermission.whileInUse) {
@@ -156,7 +146,6 @@ class _HomeTabState extends State<HomeTab> {
       );
     }
   }
-
 
   Future<void> _moveCameraToUser() async {
     final pos = await LocationService.getCurrentPosition();
@@ -199,8 +188,6 @@ class _HomeTabState extends State<HomeTab> {
     );
     return result ?? false;
   }
-
-
 
   @override
   void dispose() {
@@ -272,21 +259,21 @@ class _HomeTabState extends State<HomeTab> {
                         decoration: InputDecoration(
                           hintText: 'ابحث عن اسم المحطة…',
                           prefixIcon:
-                              const Icon(Icons.search, color: Color(0xFFD12027)),
+                          const Icon(Icons.search, color: Color(0xFFD12027)),
                           suffixIcon: _searchCtrl.text.isEmpty
                               ? null
                               : IconButton(
-                                  icon: const Icon(Icons.clear,
-                                      color: Color(0xFF9CA3AF)),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchCtrl.clear();
-                                      _suggestions.clear();
-                                      _showSuggestions = false;
-                                    });
-                                    _searchFocus.requestFocus();
-                                  },
-                                ),
+                            icon: const Icon(Icons.clear,
+                                color: Color(0xFF9CA3AF)),
+                            onPressed: () {
+                              setState(() {
+                                _searchCtrl.clear();
+                                _suggestions.clear();
+                                _showSuggestions = false;
+                              });
+                              _searchFocus.requestFocus();
+                            },
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide.none,
@@ -336,12 +323,12 @@ class _HomeTabState extends State<HomeTab> {
                                 subtitle: subtitle.isEmpty
                                     ? null
                                     : Text(
-                                        subtitle,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
+                                  subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
                                 onTap: () async {
                                   setState(() {
                                     _searchCtrl.text = st.name;
@@ -465,7 +452,6 @@ class _HomeTabState extends State<HomeTab> {
       }
     }
   }
-
   void _openSheet(BuildContext context, _Station st) {
     if (_sheetOpen) {
       Navigator.of(context, rootNavigator: true).maybePop();
@@ -475,25 +461,23 @@ class _HomeTabState extends State<HomeTab> {
 
     Future.microtask(() {
       final realCtx = _scaffoldKey.currentContext ?? context;
+
+      // كنترولر للـ ListView داخل الشيت
+      final scrollController = ScrollController();
+
       showModalBottomSheet(
         context: realCtx,
         useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         barrierColor: Colors.black54,
+        isDismissible: false, // ما يتسكر بالضغط على الخلفية
+        enableDrag: false,    // وما يتسكر بالسحب
         builder: (ctx) {
-          return DraggableScrollableSheet(
-            initialChildSize: 0.43,
-            minChildSize: 0.25,
-            maxChildSize: 0.9,
-            expand: false,
-            builder: (context, scrollController) {
-              return _StationSheet(
-                station: st,
-                scrollController: scrollController,
-                stationIdMap: _stationIdMap,
-              );
-            },
+          return _StationSheet(
+            station: st,
+            scrollController: scrollController,
+            stationIdMap: _stationIdMap,
           );
         },
       ).whenComplete(() {
@@ -502,13 +486,12 @@ class _HomeTabState extends State<HomeTab> {
     });
   }
 
+
   Future<void> _goToStation(_Station st, {bool openSheet = false}) async {
     final targetZoom = _currentZoom < 14.5 ? 14.5 : _currentZoom;
     await _map?.animateCamera(
       CameraUpdate.newLatLngZoom(st.position, targetZoom),
     );
-
-    
 
     if (openSheet && context.mounted) {
       Future.delayed(const Duration(milliseconds: 300), () {
@@ -531,19 +514,14 @@ class _HomeTabState extends State<HomeTab> {
         ringThickness: thickness,
       );
 
-      final linesList = st.lines.toList()..sort();
-      final bool multi = linesList.length > 1;
-      final linesText = linesList.join(' + ');
-
       final markerId =
-          MarkerId('${st.name}-${st.position.latitude},${st.position.longitude}');
+      MarkerId('${st.name}-${st.position.latitude},${st.position.longitude}');
       newMarkers.add(
         Marker(
           markerId: markerId,
           position: st.position,
           icon: icon,
           anchor: const Offset(0.5, 0.5),
-        
           onTap: () {
             setState(() {
               _selectedStation = st;
@@ -579,11 +557,12 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<BitmapDescriptor> _stationIconForColors(
-    List<Color> colors, {
-    double size = 32,
-    double ringThickness = 6,
-  }) async {
-    final key = '${colors.map((c) => c.value).join(",")}-$size-$ringThickness';
+      List<Color> colors, {
+        double size = 32,
+        double ringThickness = 6,
+      }) async {
+    final key =
+        '${colors.map((c) => c.value).join(",")}-$size-$ringThickness';
     final cached = _iconCache[key];
     if (cached != null) return cached;
 
@@ -654,11 +633,12 @@ class _HomeTabState extends State<HomeTab> {
     return BitmapDescriptor.fromBytes(bytes);
   }
 
-  double _deg2rad(double d) => d * 3.1415926535897932 / 180.0;
+  double _deg2rad(double d) => d * pi / 180.0;
 
   Future<void> _loadAndBuildMask() async {
     try {
-      final raw = await rootBundle.loadString('assets/data/riyadh_boundary.geojson');
+      final raw =
+      await rootBundle.loadString('assets/data/riyadh_boundary.geojson');
       final geo = json.decode(raw);
 
       final rings = _extractOuterRings(geo);
@@ -673,7 +653,7 @@ class _HomeTabState extends State<HomeTab> {
 
       final partsCW = rings.map((r) => _ensureCW(r)).toList();
       final mergedOutlineCW =
-          _computeUnionOutlineRings(partsCW, precision: 1e-6);
+      _computeUnionOutlineRings(partsCW, precision: 1e-6);
       final holesCCW = mergedOutlineCW.map((r) => _ensureCCW(r)).toList();
 
       _polygons
@@ -814,27 +794,29 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   List<List<LatLng>> _computeUnionOutlineRings(
-    List<List<LatLng>> parts, {
-    double precision = 1e-6,
-  }) {
-    final edgeCount = <String, List<LatLng>>{};
-    final edgeAB = <String, List<LatLng>>{};
+      List<List<LatLng>> parts, {
+        double precision = 1e-6,
+      }) {
+    final edgeCount = <String, int>{};
 
     for (final ring in parts) {
       for (final e in _ringEdges(ring)) {
         final a = e[0], b = e[1];
         final key = _edgeKey(a, b, precision: precision);
-        edgeCount[key] = (edgeCount[key] ?? [])..addAll([a, b]);
-        edgeAB.putIfAbsent(key, () => [a, b]);
+        edgeCount[key] = (edgeCount[key] ?? 0) + 1;
       }
     }
 
     final boundaryEdges = <String, List<LatLng>>{};
-    edgeCount.forEach((key, listAB) {
-      if (listAB.length == 2) {
-        boundaryEdges[key] = edgeAB[key]!;
+    for (final ring in parts) {
+      for (final e in _ringEdges(ring)) {
+        final a = e[0], b = e[1];
+        final key = _edgeKey(a, b, precision: precision);
+        if (edgeCount[key] == 1) {
+          boundaryEdges[key] = [a, b];
+        }
       }
-    });
+    }
 
     final adj = <String, List<LatLng>>{};
     void addAdj(LatLng u, LatLng v) {
@@ -849,10 +831,10 @@ class _HomeTabState extends State<HomeTab> {
     }
 
     final visitedEdges = <String, bool>{};
-    final outlines = <List<LatLng>>[];
-
     String dirKey(LatLng u, LatLng v) =>
         '${_keyPt(u, precision: precision)}->${_keyPt(v, precision: precision)}';
+
+    final outlines = <List<LatLng>>[];
 
     for (final ab in boundaryEdges.values) {
       final startA = ab[0];
@@ -918,7 +900,7 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _loadStations() async {
     try {
       final raw =
-          await rootBundle.loadString('assets/data/metro_stations.json');
+      await rootBundle.loadString('assets/data/metro_stations.json');
       final data = json.decode(raw);
       final List list = (data is Map && data['results'] is List)
           ? data['results'] as List
@@ -928,14 +910,14 @@ class _HomeTabState extends State<HomeTab> {
 
       for (final s in list) {
         final String nameAr =
-            (s['metrostationnamear'] ?? '').toString().trim();
+        (s['metrostationnamear'] ?? '').toString().trim();
         final String nameEn = (s['metrostationname'] ?? '').toString().trim();
         final String displayName =
-            nameAr.isNotEmpty ? nameAr : (nameEn.isNotEmpty ? nameEn : 'محطة');
+        nameAr.isNotEmpty ? nameAr : (nameEn.isNotEmpty ? nameEn : 'محطة');
         final String key = _normalizeForSearch(displayName);
 
         final String lineFull =
-            (s['metrolinenamear'] ?? s['metrolinename'] ?? '').toString();
+        (s['metrolinenamear'] ?? s['metrolinename'] ?? '').toString();
         final String lineShort = _shortLineName(lineFull);
         final Color color = _colorForLine(lineFull);
 
@@ -958,13 +940,13 @@ class _HomeTabState extends State<HomeTab> {
         if (lat == null || lon == null) continue;
 
         final bucket = byName.putIfAbsent(key, () => {
-              'nameArOrEn': displayName,
-              'nameEn': nameEn,
-              'lats': <double>[],
-              'lons': <double>[],
-              'lines': <String>{},
-              'colors': <int>{},
-            });
+          'nameArOrEn': displayName,
+          'nameEn': nameEn,
+          'lats': <double>[],
+          'lons': <double>[],
+          'lines': <String>{},
+          'colors': <int>{},
+        });
 
         (bucket['lats'] as List<double>).add(lat);
         (bucket['lons'] as List<double>).add(lon);
@@ -982,8 +964,8 @@ class _HomeTabState extends State<HomeTab> {
 
           final lines = (b['lines'] as Set<String>).toList()..sort();
           final colors =
-              (b['colors'] as Set<int>).map((v) => Color(v)).toList()
-                ..sort((a, b) => a.value.compareTo(b.value));
+          (b['colors'] as Set<int>).map((v) => Color(v)).toList()
+            ..sort((a, b) => a.value.compareTo(b.value));
 
           return _Station(
             name: b['nameArOrEn'] as String,
@@ -1047,7 +1029,10 @@ class _HomeTabState extends State<HomeTab> {
   }
 }
 
-class _StationSheet extends StatelessWidget {
+/*==========================
+   Bottom Sheet: Station
+ ==========================*/
+class _StationSheet extends StatefulWidget {
   final _Station station;
   final ScrollController scrollController;
   final Map<String, String> stationIdMap;
@@ -1057,6 +1042,13 @@ class _StationSheet extends StatelessWidget {
     required this.scrollController,
     required this.stationIdMap,
   });
+
+  @override
+  State<_StationSheet> createState() => _StationSheetState();
+}
+
+class _StationSheetState extends State<_StationSheet> {
+  bool _isExpanded = false; // false = نص الشاشة, true = فل سكرين
 
   /// ربط ذكي للـ station_id سواء كانت الخريطة ID->Name أو Name->ID
   String? _resolveStationId({
@@ -1083,12 +1075,22 @@ class _StationSheet extends StatelessWidget {
 
       if (keyLooksLikeId) {
         // الخريطة ID -> Name
-        if (nv == nAr || nv == nEn || nv.contains(nAr) || nv.contains(nEn) || nAr.contains(nv) || nEn.contains(nv)) {
+        if (nv == nAr ||
+            nv == nEn ||
+            nv.contains(nAr) ||
+            nv.contains(nEn) ||
+            nAr.contains(nv) ||
+            nEn.contains(nv)) {
           return k;
         }
       } else {
         // الخريطة Name -> ID
-        if (nk == nAr || nk == nEn || nk.contains(nAr) || nk.contains(nEn) || nAr.contains(nk) || nEn.contains(nk)) {
+        if (nk == nAr ||
+            nk == nEn ||
+            nk.contains(nAr) ||
+            nk.contains(nEn) ||
+            nAr.contains(nk) ||
+            nEn.contains(nk)) {
           return v;
         }
       }
@@ -1098,8 +1100,12 @@ class _StationSheet extends StatelessWidget {
     for (final e in map.entries) {
       final nk = norm(e.key);
       final nv = norm(e.value);
-      if (nk.isNotEmpty && (nAr.contains(nk) || nEn.contains(nk))) return e.value;
-      if (nv.isNotEmpty && (nAr.contains(nv) || nEn.contains(nv))) return e.key;
+      if (nk.isNotEmpty && (nAr.contains(nk) || nEn.contains(nk))) {
+        return e.value;
+      }
+      if (nv.isNotEmpty && (nAr.contains(nv) || nEn.contains(nv))) {
+        return e.key;
+      }
     }
     return null;
   }
@@ -1115,148 +1121,216 @@ class _StationSheet extends StatelessWidget {
       const Color(0xFF984C9D): 6,
     };
 
-    // نحسم station_id
     final stationId = _resolveStationId(
-      stationNameAr: station.name,
-      stationNameEn: station.altName,
-      map: stationIdMap,
+      stationNameAr: widget.station.name,
+      stationNameEn: widget.station.altName,
+      map: widget.stationIdMap,
     );
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                station.name,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
-                ),
-              ),
-            ),
-           
-            const SizedBox(height: 16),
-
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'المسارات:',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      child: FractionallySizedBox(
+        heightFactor: _isExpanded ? 1.0 : 0.43, // 👈 نص الشاشة أو فل سكرين
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Header مع زر الإغلاق فقط عندما تكون ممدودة (فل سكرين)
+              if (_isExpanded)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  alignment: Alignment.centerRight, // زر X في الزاوية اليمين
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.close, size: 24),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (int i = 0; i < station.colors.length; i++)
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: station.colors[i],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${colorToLineNumber[station.colors[i]] ?? (i + 1)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                ),
+
+              // Drag handle يظهر فقط عندما لا تكون ممدودة
+              if (!_isExpanded)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    setState(() => _isExpanded = true);
+                  },
+                  onVerticalDragUpdate: (details) {
+                    if (details.primaryDelta != null &&
+                        details.primaryDelta! < -4) {
+                      // سحبة لفوق -> فل سكرين
+                      setState(() => _isExpanded = true);
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 4),
+                    child: Center(
+                      child: Container(
+                        width: 42,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              Expanded(
+                child: ListView(
+                  controller: widget.scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    _isExpanded ? 8 : 16, // تقليل padding الأعلى عندما تكون ممددة
+                    20,
+                    32,
+                  ),
+                  children: [
+                    if (!_isExpanded) const SizedBox(height: 8),
+
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        widget.station.name,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // المسارات
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'المسارات:',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (int i = 0; i < widget.station.colors.length; i++)
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: widget.station.colors[i],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${colorToLineNumber[widget.station.colors[i]] ?? (i + 1)}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // حالة الازدحام
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'حالة الازدحام',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
                         ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'حالة الازدحام',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                    _CrowdStatusWidget(stationId: stationId),
+                    const SizedBox(height: 24),
+
+                    const Divider(thickness: 1.1),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'الجدول الزمني',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    if (stationId != null)
+                      _ScheduleWidget(
+                        stationId: stationId,
+                        stationName: widget.station.name,
+                        colors: widget.station.colors,
+                        colorToLineNumber: colorToLineNumber,
+                        stationIdMap: widget.stationIdMap,
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'لا توجد بيانات جدولة متاحة لهذه المحطة',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-
-            _CrowdStatusWidget(stationId: stationId),
-            const SizedBox(height: 24),
-
-            const Divider(thickness: 1.1),
-            const SizedBox(height: 10),
-            const Text(
-              'الجدول الزمني',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-
-            if (stationId != null)
-              _ScheduleWidget(
-                stationId: stationId,
-                stationName: station.name,
-                colors: station.colors,
-                colorToLineNumber: colorToLineNumber,
-                stationIdMap: stationIdMap,
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'لا توجد بيانات جدولة متاحة لهذه المحطة',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+
+
+
+/*==========================
+   Crowd Status Widget
+ ==========================*/
+
 class _CrowdStatusWidget extends StatefulWidget {
   final String? stationId;
 
@@ -1279,7 +1353,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
   void initState() {
     super.initState();
 
-    // أنيميشن نبض بسيط للدائرة
     _dotCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -1323,7 +1396,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     });
 
     try {
-      // ✅ الرابط الصحيح حسب المحطة
       final url = Uri.parse('https://masar-sim.onrender.com/snapshot/$sid');
       final res = await http.get(url);
 
@@ -1349,7 +1421,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     }
   }
 
-  // ترجمة الحالة للعربي
   String _arabicLabel(String level) {
     switch (level.toLowerCase()) {
       case 'low':
@@ -1365,7 +1436,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     }
   }
 
-  // لون كل حالة
   Color _colorForLevel(String level) {
     switch (level.toLowerCase()) {
       case 'low':
@@ -1381,57 +1451,52 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     }
   }
 
-  // الدائرة النابضة
   Widget _pulsingDot(Color color) {
-  return SizedBox(
-    width: 18,
-    height: 18,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        // التوهج الخلفي — أصغر وأخف
-        ScaleTransition(
-          scale: Tween<double>(begin: 1.0, end: 1.5).animate(
-            CurvedAnimation(
-              parent: _dotCtrl,
-              curve: Curves.easeOut,
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ScaleTransition(
+            scale: Tween<double>(begin: 1.0, end: 1.5).animate(
+              CurvedAnimation(
+                parent: _dotCtrl,
+                curve: Curves.easeOut,
+              ),
+            ),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.18),
+                shape: BoxShape.circle,
+              ),
             ),
           ),
-          child: Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.18),
-              shape: BoxShape.circle,
+          ScaleTransition(
+            scale: _dotScale,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.5),
+                    blurRadius: 4,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
 
-        // النقطة الأساسية — أصغر + ظل أنعم
-        ScaleTransition(
-          scale: _dotScale,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.5),
-                  blurRadius: 4,
-                  spreadRadius: 0.5,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-  // الكبسولة (نفس شكل كودك القديم، بس مع النبض)
   Widget _pill(Color color, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -1454,7 +1519,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     );
   }
 
-  // نفس فكرة _crowdRow اللي عندك، لكن نستخدم _pill مع النبض
   Widget _crowdRow({
     required String title,
     required Color color,
@@ -1509,7 +1573,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
     final currentColor = _colorForLevel(level);
     final currentLabel = _arabicLabel(level);
 
-    // مؤقتاً: التوقع = نفس الحالة الحالية (لين تربطين مودل التوقع)
     final futureColor = currentColor;
     final futureLabel = currentLabel;
 
@@ -1522,7 +1585,6 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // نفس صفّك القديم
           _crowdRow(
             title: 'الحالية:',
             color: currentColor,
@@ -1540,8 +1602,9 @@ class _CrowdStatusWidgetState extends State<_CrowdStatusWidget>
   }
 }
 
-
-
+/*==========================
+   Schedule Widget
+ ==========================*/
 
 class _ScheduleWidget extends StatelessWidget {
   final String stationName;
@@ -1565,8 +1628,13 @@ class _ScheduleWidget extends StatelessWidget {
 
   // أسماء محتملة لحقل الوجهة داخل وثيقة الرحلة
   static const List<String> _tripEndCandidates = [
-    'end_station_code', 'endStationCode',
-    'end_station', 'destination', 'dest', 'dest_code', 'end_code',
+    'end_station_code',
+    'endStationCode',
+    'end_station',
+    'destination',
+    'dest',
+    'dest_code',
+    'end_code',
   ];
 
   // اقرأ الوجهة من وثيقة الرحلة الأم
@@ -1616,6 +1684,13 @@ class _ScheduleWidget extends StatelessWidget {
       }
     }
     return null;
+  }
+
+  bool _isTerminalHere(String? destName) {
+    if (destName == null || destName.trim().isEmpty) return false;
+    final nd = norm(destName);
+    final ns = norm(stationName);
+    return nd == ns;
   }
 
   Widget _scheduleRow({
@@ -1680,25 +1755,81 @@ class _ScheduleWidget extends StatelessWidget {
       ),
     );
   }
-  bool _isTerminalHere(String? destName) {
-    if (destName == null || destName.trim().isEmpty) return false;
-    final nd = norm(destName);      // 👈 يستخدم نفس الدالة الموجودة فوق
-    final ns = norm(stationName);   // 👈 اسم المحطة الحالية
-    return nd == ns;
+
+  Color _getColorForLine(String lineId) {
+    switch (lineId.toLowerCase()) {
+      case 'blue':
+        return const Color(0xFF00ADE5);
+      case 'red':
+        return const Color(0xFFD12027);
+      case 'orange':
+        return const Color(0xFFF68D39);
+      case 'yellow':
+        return const Color(0xFFFFC107);
+      case 'green':
+        return const Color(0xFF43B649);
+      case 'purple':
+        return const Color(0xFF984C9D);
+      default:
+        return Colors.grey;
+    }
   }
 
+  // "09:32AM"
+  String _formatArrivalTime(String time) {
+    try {
+      final parts = time.split(':');
+      if (parts.length >= 2) {
+        int hour24 = int.parse(parts[0]);
+        final minute = parts[1].padLeft(2, '0');
+
+        final isPM = hour24 >= 12;
+        int hour12 = hour24 % 12;
+        if (hour12 == 0) hour12 = 12;
+
+        final hh = hour12.toString().padLeft(2, '0');
+        final suffix = isPM ? 'PM' : 'AM';
+        return '$hh:$minute$suffix';
+      }
+    } catch (_) {}
+    return time;
+  }
+
+  String _formatFromTimestamp(Timestamp ts) {
+    final dt = ts.toDate();
+    int hour24 = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+
+    final isPM = hour24 >= 12;
+    int hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+
+    final hh = hour12.toString().padLeft(2, '0');
+    final suffix = isPM ? 'PM' : 'AM';
+    return '$hh:$minute$suffix';
+  }
+
+  Widget _boxed(Widget child) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.grey[100],
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: child,
+  );
 
   @override
   Widget build(BuildContext context) {
-   
     final DateTime now = DateTime.now();
     final DateTime end = now.add(const Duration(minutes: 30));
 
     final stream = FirebaseFirestore.instance
         .collectionGroup('stops')
         .where('station_id', isEqualTo: stationId)
-        .where('arrival_timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
-        .where('arrival_timestamp', isLessThan: Timestamp.fromDate(end))
+        .where('arrival_timestamp',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .where('arrival_timestamp',
+        isLessThan: Timestamp.fromDate(end))
         .orderBy('arrival_timestamp')
         .limit(20)
         .snapshots();
@@ -1747,125 +1878,98 @@ class _ScheduleWidget extends StatelessWidget {
               final ts = data['arrival_timestamp'];
               if (data['arrival_time'] is String &&
                   (data['arrival_time'] as String).isNotEmpty) {
-                timeStr = _formatArrivalTime(data['arrival_time'] as String);
+                timeStr = _formatArrivalTime(
+                    data['arrival_time'] as String);
               } else if (ts is Timestamp) {
                 timeStr = _formatFromTimestamp(ts);
               }
 
-              // 1) حاول نقرأ الوجهة مباشرة من stop
-              String? endCode = (data['end_station_code'] as String?)?.trim();
+              // 1) نحاول نقرأ الوجهة مباشرة من stop
+              String? endCode =
+              (data['end_station_code'] as String?)?.trim();
               if (endCode == null || endCode.isEmpty) {
-                for (final k in ['end_station','endStation','destination','dest','dest_code','end_code']) {
+                for (final k in [
+                  'end_station',
+                  'endStation',
+                  'destination',
+                  'dest',
+                  'dest_code',
+                  'end_code'
+                ]) {
                   final v = (data[k] as String?)?.trim();
-                  if (v != null && v.isNotEmpty) { endCode = v; break; }
+                  if (v != null && v.isNotEmpty) {
+                    endCode = v;
+                    break;
+                  }
                 }
               }
 
-              // 2) إن ما وُجدت، نجيبها من وثيقة الرحلة الأم trips/{tripId}
               final tripRef = doc.reference.parent.parent;
+              Future<String?> futureEndCode;
 
-                 if (endCode != null || tripRef == null) {
-                  final destName = _resolveEndName(endCode) ?? 'وجهة غير معروفة';
+              if (endCode != null) {
+                futureEndCode = Future.value(endCode);
+              } else if (tripRef != null) {
+                futureEndCode = _getTripEndCodeFromTrip(tripRef);
+              } else {
+                futureEndCode = Future.value(null);
+              }
 
-                  // 👇 إذا الوجهة هي نفس المحطة الحالية لا نعرض السطر
+              return FutureBuilder<String?>(
+                future: futureEndCode,
+                builder: (context, snap) {
+                  final code = snap.data;
+                  final destName =
+                      _resolveEndName(code) ?? 'وجهة غير معروفة';
+
+                  // لو الوجهة هي نفس المحطة ما نعرض الصف
                   if (_isTerminalHere(destName)) {
                     return const SizedBox.shrink();
                   }
 
-                  return _scheduleRow(
-                    i: i, total: docs.length, timeStr: timeStr,
-                    lineNumber: lineNumber, color: color, destName: destName,
+                  return InkWell(
+                    onTap: () {
+                      final tripId = tripRef?.id ?? '';
+
+                      if (tripId.isEmpty) return;
+
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TrainCarriageView(
+                            stationName: stationName,
+                            tripId: tripId,
+                            lineId: lineId,
+                            lineNumber: lineNumber,
+                            lineColor: color,
+                            departureTime: timeStr,
+                            destination: destName,
+                            stationId: stationId,
+                          ),
+                        ),
+                      );
+                    },
+                    child: _scheduleRow(
+                      i: i,
+                      total: docs.length,
+                      timeStr: timeStr,
+                      lineNumber: lineNumber,
+                      color: color,
+                      destName: destName,
+                    ),
                   );
-                }
-                else {
-                return FutureBuilder<String?>(
-                  future: _getTripEndCodeFromTrip(tripRef),
-                  builder: (context, snap) {
-                    final code = snap.data;
-                    final destName = _resolveEndName(code) ?? 'وجهة غير معروفة';
-
-                    // 👇 برضه هنا: إذا الوجهة هي نفس المحطة لا نعرض الصف
-                    if (_isTerminalHere(destName)) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return _scheduleRow(
-                      i: i, total: docs.length, timeStr: timeStr,
-                      lineNumber: lineNumber, color: color, destName: destName,
-                    );
-                  },
-                );
-
-              }
+                },
+              );
             }),
           ),
         );
       },
     );
   }
-
-  Widget _boxed(Widget child) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: child,
-      );
-
-  Color _getColorForLine(String lineId) {
-    switch (lineId.toLowerCase()) {
-      case 'blue':
-        return const Color(0xFF00ADE5);
-      case 'red':
-        return const Color(0xFFD12027);
-      case 'orange':
-        return const Color(0xFFF68D39);
-      case 'yellow':
-        return const Color(0xFFFFC107);
-      case 'green':
-        return const Color(0xFF43B649);
-      case 'purple':
-        return const Color(0xFF984C9D);
-      default:
-        return Colors.grey;
-    }
-  }
-
-  // "09:32AM"
-  String _formatArrivalTime(String time) {
-    try {
-      final parts = time.split(':');
-      if (parts.length >= 2) {
-        int hour24 = int.parse(parts[0]);
-        final minute = parts[1].padLeft(2, '0');
-
-        final isPM = hour24 >= 12;
-        int hour12 = hour24 % 12;
-        if (hour12 == 0) hour12 = 12;
-
-        final hh = hour12.toString().padLeft(2, '0');
-        final suffix = isPM ? 'PM' : 'AM';
-        return '$hh:$minute$suffix';
-      }
-    } catch (_) {}
-    return time;
-  }
-
-  String _formatFromTimestamp(Timestamp ts) {
-    final dt = ts.toDate(); // وقت محلي
-    int hour24 = dt.hour;
-    final minute = dt.minute.toString().padLeft(2, '0');
-
-    final isPM = hour24 >= 12;
-    int hour12 = hour24 % 12;
-    if (hour12 == 0) hour12 = 12;
-
-    final hh = hour12.toString().padLeft(2, '0');
-    final suffix = isPM ? 'PM' : 'AM';
-    return '$hh:$minute$suffix';
-  }
 }
+
+/*==========================
+   Station Model
+ ==========================*/
 
 class _Station {
   final String name;
