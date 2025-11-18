@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Import the simulation engine (snapshot generator)
+# Import simulation engine
 from sim_core import (
     RIYADH_TZ,
     generate_all_stations_snapshot,
@@ -25,7 +25,7 @@ from sim_core import (
 )
 
 # ------------------------------------------------------------
-# Paths & Model Loading
+# Model loading
 # ------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -68,28 +68,28 @@ LEVEL_TO_INT = {
 }
 
 # ------------------------------------------------------------
-# FastAPI App
+# FastAPI + CORS
 # ------------------------------------------------------------
+
 app = FastAPI(
     title="Masar Snapshot & Forecast API",
-    description="On-demand congestion snapshots + 30-min ML forecast for Riyadh Metro stations",
+    description="On-demand congestion snapshots + 30-min ML forecast",
     version="1.0.0",
 )
 
-# CORS for Flutter
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change in production
+    allow_origins=["*"],   # change in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ------------------------------------------------------------
-# Firebase / Firestore Initialization
+# Firestore init with env variable
 # ------------------------------------------------------------
-_firestore_client = None
 
+_firestore_client = None
 
 def init_firebase_app():
     global _firestore_client
@@ -115,10 +115,10 @@ def init_firebase_app():
 def get_firestore_client():
     return init_firebase_app()
 
+# ------------------------------------------------------------
+# Prediction input
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Pydantic Input for Prediction
-# ------------------------------------------------------------
 class CrowdRequest(BaseModel):
     hour: int
     minute_of_day: int
@@ -138,10 +138,10 @@ class CrowdRequest(BaseModel):
     roll_std_15: float
     roll_mean_60: float
 
+# ------------------------------------------------------------
+# Prediction API
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# ML Prediction
-# ------------------------------------------------------------
 @app.post("/predict_30min")
 def predict_30min(req: CrowdRequest):
     row = pd.DataFrame([req.dict()])[FEATURES]
@@ -150,9 +150,7 @@ def predict_30min(req: CrowdRequest):
     predicted_total = max(0.0, y_pred)
 
     station_code = f"S{req.station_id}"
-
     capacity = get_capacity(station_code)
-
     level_text, ratio = classify_from_cap(predicted_total, capacity)
     level_code = LEVEL_TO_INT[level_text]
 
@@ -166,54 +164,49 @@ def predict_30min(req: CrowdRequest):
         "crowd_level_30min_code": level_code,
     }
 
+# ------------------------------------------------------------
+# Health
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Health Check
-# ------------------------------------------------------------
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
+# ------------------------------------------------------------
+# Snapshots
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Snapshots: All Stations
-# ------------------------------------------------------------
 @app.get("/snapshot/all")
 def snapshot_all():
     dt = datetime.now(RIYADH_TZ)
-    snapshots = generate_all_stations_snapshot(dt)
-
+    snaps = generate_all_stations_snapshot(dt)
     return {
         "timestamp": dt.isoformat(),
-        "count": len(snapshots),
-        "stations": snapshots,
+        "count": len(snaps),
+        "stations": snaps,
     }
 
-
-# ------------------------------------------------------------
-# Snapshot: Single Station
-# ------------------------------------------------------------
 @app.get("/snapshot/{station_id}")
 def snapshot_station(station_id: str):
     dt = datetime.now(RIYADH_TZ)
-    snap = make_snapshot_for_station(station_id, dt)
-    return snap
-
+    return make_snapshot_for_station(station_id, dt)
 
 # ------------------------------------------------------------
-# Backfill: Generate Last 2 Hours and Write to Firestore
+# BACKFILL last 2 hours (timestamp = Firestore Timestamp)
 # ------------------------------------------------------------
+
 def generate_last_2h_history(step_minutes=1):
     now = datetime.now(RIYADH_TZ)
     start = now - timedelta(hours=2)
-    t = start
 
     snapshots = []
+    t = start
+
     while t <= now:
         frame = generate_all_stations_snapshot(t)
         for s in frame:
             item = s.copy()
-            item["timestamp"] = t
+            item["timestamp"] = t           # Firestore timestamp
             snapshots.append(item)
         t += timedelta(minutes=step_minutes)
 
@@ -222,20 +215,21 @@ def generate_last_2h_history(step_minutes=1):
 
 def write_last_2h_to_firestore(step_minutes=1):
     db = get_firestore_client()
-    snapshots = generate_last_2h_history(step_minutes)
+    snaps = generate_last_2h_history(step_minutes)
 
     batch = db.batch()
     count = 0
 
-    for snap in snapshots:
+    for snap in snaps:
         station_id = snap["station_id"]
         ts = snap["timestamp"]
 
+        doc_id = ts.strftime("%Y%m%d%H%M")     # clean ID
         doc_ref = (
             db.collection("live")
             .document(station_id)
             .collection("ticks")
-            .document(ts.isoformat())
+            .document(doc_id)
         )
 
         batch.set(doc_ref, snap)
@@ -249,34 +243,35 @@ def write_last_2h_to_firestore(step_minutes=1):
     return count
 
 
-@app.post("/backfill_last_2h")
+@app.api_route("/backfill_last_2h", methods=["GET", "POST"])
 def backfill_last_2h():
     try:
         written = write_last_2h_to_firestore(step_minutes=1)
-        return {
-            "status": "ok",
-            "written_ticks": written,
-        }
+        return {"status": "ok", "written_ticks": written}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ------------------------------------------------------------
+# LIVE tick (every minute)
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Live Tick: Add Now + Delete Older Than 2 Hours
-# ------------------------------------------------------------
 def write_current_tick(now):
     db = get_firestore_client()
     frame = generate_all_stations_snapshot(now)
 
     batch = db.batch()
+
     for snap in frame:
         station_id = snap["station_id"]
+        doc_id = now.strftime("%Y%m%d%H%M")
+
+        snap["timestamp"] = now   # Firestore timestamp
 
         doc_ref = (
             db.collection("live")
             .document(station_id)
             .collection("ticks")
-            .document(now.isoformat())
+            .document(doc_id)
         )
 
         batch.set(doc_ref, snap)
@@ -285,15 +280,16 @@ def write_current_tick(now):
 
 
 def delete_old(now):
-    db = get_firestore_client()
     cutoff = now - timedelta(hours=2)
+    db = get_firestore_client()
 
     stations = db.collection("live").stream()
     deleted = 0
 
     for station in stations:
         ticks = (
-            station.reference.collection("ticks")
+            station.reference
+            .collection("ticks")
             .where("timestamp", "<", cutoff)
             .stream()
         )
@@ -303,8 +299,8 @@ def delete_old(now):
 
         for doc in ticks:
             batch.delete(doc.reference)
-            has = True
             deleted += 1
+            has = True
 
         if has:
             batch.commit()
@@ -312,28 +308,25 @@ def delete_old(now):
     return deleted
 
 
-@app.post("/tick_live")
+@app.api_route("/tick_live", methods=["GET", "POST"])
 def tick_live():
     now = datetime.now(RIYADH_TZ)
 
     try:
         write_current_tick(now)
         deleted = delete_old(now)
-
         return {
             "status": "ok",
             "now": now.isoformat(),
             "deleted_old_ticks": deleted,
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ------------------------------------------------------------
+# Local run
+# ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Local Run
-# ------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
