@@ -1,7 +1,7 @@
 // lib/train_carriage_view.dart
+
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TrainCarriageView extends StatefulWidget {
   final String stationName;
@@ -29,101 +29,439 @@ class TrainCarriageView extends StatefulWidget {
   State<TrainCarriageView> createState() => _TrainCarriageViewState();
 }
 
-class _TrainCarriageViewState extends State<TrainCarriageView> {
+class _TrainCarriageViewState extends State<TrainCarriageView>
+    with TickerProviderStateMixin {
   bool _loading = true;
-  String? _error;
-  bool _usingMock = false;
+
+  String? _error;        // أخطاء حقيقية
+  String? _infoMessage;  // حالات طبيعية (محطة أولى، قطار ما تحرك، قطار فاضي)
+
   List<CarriageData> _carriages = [];
+  List<AnimationController> _fillControllers = [];
+  List<Animation<double>> _fillAnimations = [];
+
+  late AnimationController _dotCtrl;
+  late Animation<double> _dotScale;
 
   @override
   void initState() {
     super.initState();
+
+    _dotCtrl = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _dotScale = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _dotCtrl,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     _fetchCarriageData();
   }
 
-  void _useMockCarriages() {
-    setState(() {
-      _usingMock = true;
-      _error = null;
-      _loading = false;
-      _carriages = [
-        CarriageData(
-          number: 1,
-          className: 'الدرجة الأولى',
-          crowdingPercent: 100,
-        ),
-        CarriageData(
-          number: 2,
-          className: 'العوائل',
-          crowdingPercent: 70,
-        ),
-        CarriageData(
-          number: 3,
-          className: 'العوائل',
-          crowdingPercent: 30,
-        ),
-        CarriageData(
-          number: 4,
-          className: 'الأفراد',
-          crowdingPercent: 45,
-        ),
-      ];
+  void _initAnimations() {
+    for (final c in _fillControllers) {
+      c.dispose();
+    }
+    _fillControllers = [];
+    _fillAnimations = [];
+
+    _fillControllers = List.generate(
+      _carriages.length,
+      (index) => AnimationController(
+        duration: Duration(milliseconds: 1500 + (index * 200)),
+        vsync: this,
+      ),
+    );
+
+    _fillAnimations = _fillControllers.map((controller) {
+      return Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
+      );
+    }).toList();
+
+    Future.delayed(const Duration(milliseconds: 300), () {
+      for (int i = 0; i < _fillControllers.length; i++) {
+        Future.delayed(Duration(milliseconds: i * 150), () {
+          if (mounted) _fillControllers[i].forward();
+        });
+      }
     });
   }
 
+  @override
+  void dispose() {
+    for (final controller in _fillControllers) {
+      controller.dispose();
+    }
+    _dotCtrl.dispose();
+    super.dispose();
+  }
+
+  /// ماب لأنواع المقطورات لأسماء عربية
+  String _mapClassName(String? rawType) {
+    final t = (rawType ?? '').toLowerCase().trim();
+    if (t == 'vip') {
+      return 'الدرجة الأولى';
+    } else if (t == 'families') {
+      return 'العوائل';
+    } else if (t == 'individuals') {
+      return 'الأفراد';
+    }
+    if (rawType != null && rawType.trim().isNotEmpty) {
+      return rawType;
+    }
+    return 'العامة';
+  }
+
+  // =========================
+  //  🔥 الربط مع Firestore + منطق التتبع
+  // =========================
   Future<void> _fetchCarriageData() async {
     try {
-      final url = Uri.parse(
-        'https://masar-sim.onrender.com/carriage_crowding/${widget.tripId}/${widget.stationId}',
-      );
+      const monthKey = '2025-11_12'; // نفس المفتاح المستخدم في سكربت الرفع
+      final fs = FirebaseFirestore.instance;
 
-      final res = await http.get(url);
+      // trips_month / 2025-11_12 / trips / {tripId}
+      final tripRef = fs
+          .collection('trips_month')
+          .doc(monthKey)
+          .collection('trips')
+          .doc(widget.tripId);
 
-      if (res.statusCode != 200) {
-        _useMockCarriages();
+      // 1) stop الخاص بالمحطة الحالية في هذه الرحلة
+      final currentStopsSnap = await tripRef
+          .collection('stops')
+          .where('station_id', isEqualTo: widget.stationId)
+          .limit(1)
+          .get();
+
+      if (currentStopsSnap.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error =
+              'لا يوجد توقف لهذه المحطة (${widget.stationId}) في هذه الرحلة.';
+          _infoMessage = null;
+          _carriages = [];
+          _loading = false;
+        });
         return;
       }
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data['carriages'] is! List) {
-        _useMockCarriages();
+      final currentStopDoc = currentStopsSnap.docs.first;
+      final currentData = currentStopDoc.data();
+
+      // رقم التوقف للمحطة الحالية
+      int currentSeq;
+      try {
+        currentSeq = int.parse(currentStopDoc.id);
+      } catch (_) {
+        final seqRaw = currentData['stop_sequence'];
+        if (seqRaw is int) {
+          currentSeq = seqRaw;
+        } else if (seqRaw is String) {
+          currentSeq = int.tryParse(seqRaw) ?? 1;
+        } else {
+          currentSeq = 1;
+        }
+      }
+
+      // 2) كل التوقفات لهذه الرحلة
+      final allStopsSnap = await tripRef.collection('stops').get();
+
+      if (allStopsSnap.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'لا توجد أي توقفات مسجلة لهذه الرحلة.';
+          _infoMessage = null;
+          _carriages = [];
+          _loading = false;
+        });
         return;
       }
 
-      final List list = data['carriages'] as List;
-      if (list.isEmpty) {
-        _useMockCarriages();
+      // نبني ميتاداتا لكل stop
+      final stopsMeta = <Map<String, dynamic>>[];
+
+      for (final d in allStopsSnap.docs) {
+        final data = d.data();
+        // seq
+        int seq;
+        try {
+          seq = int.parse(d.id);
+        } catch (_) {
+          final seqRaw = data['stop_sequence'];
+          if (seqRaw is int) {
+            seq = seqRaw;
+          } else if (seqRaw is String) {
+            seq = int.tryParse(seqRaw) ?? 0;
+          } else {
+            seq = 0;
+          }
+        }
+
+        if (seq == 0) continue;
+
+        Timestamp? depTs;
+        final ts = data['departure_timestamp'];
+        if (ts is Timestamp) depTs = ts;
+
+        final sid = (data['station_id'] as String?) ?? '';
+
+        stopsMeta.add({
+          'ref': d.reference,
+          'seq': seq,
+          'depTs': depTs,
+          'stationId': sid,
+        });
+      }
+
+      if (stopsMeta.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'لا توجد بيانات كافية عن التوقفات لهذه الرحلة.';
+          _infoMessage = null;
+          _carriages = [];
+          _loading = false;
+        });
         return;
       }
 
-      final carriages = list.map((c) {
+      // أول محطة في الرحلة (أقل stop_sequence)
+      int firstSeq = stopsMeta.first['seq'] as int;
+      for (final m in stopsMeta) {
+        final s = m['seq'] as int;
+        if (s < firstSeq) firstSeq = s;
+      }
+
+      // 3) لو هذه أول محطة في الرحلة → حالة طبيعية
+      if (currentSeq <= firstSeq) {
+        if (!mounted) return;
+        setState(() {
+          _infoMessage =
+              'هذه هي المحطة الأولى في هذه الرحلة. سيتم عرض ازدحام المقطورات بعد تحرك القطار من هنا.';
+          _error = null;
+          _carriages = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      // 4) نحدد "الوقت الحالي" (UTC)
+      final nowUtc = DateTime.now().toUtc();
+
+      // آخر محطة غادرها القطار (departure <= now) وقبل محطتك
+      Map<String, dynamic>? lastDeparted;
+      for (final m in stopsMeta) {
+        final seq = m['seq'] as int;
+        final depTs = m['depTs'] as Timestamp?;
+
+        if (seq >= currentSeq) continue; // لازم تكون قبل محطتك
+        if (depTs == null) continue;
+
+        final depTime = depTs.toDate().toUtc();
+        if (depTime.isAfter(nowUtc)) continue; // لسه ما غادرها
+
+        if (lastDeparted == null) {
+          lastDeparted = m;
+        } else {
+          final prevDep =
+              (lastDeparted['depTs'] as Timestamp).toDate().toUtc();
+          if (depTime.isAfter(prevDep)) lastDeparted = m;
+        }
+      }
+
+      // 5) ما فيه محطة قبل محطتك غادرت فعليًا → الرحلة ما بدأت لسه بالنسبة لك
+      if (lastDeparted == null) {
+        if (!mounted) return;
+        setState(() {
+          _infoMessage =
+              'القطار لم يغادر المحطة الأولى بعد بالنسبة لهذه الرحلة. سيتم عرض ازدحام المقطورات عند تحركه.';
+          _error = null;
+          _carriages = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      final lastStopRef = lastDeparted['ref'] as DocumentReference;
+
+      // 6) carriages للمحطة الأخيرة اللي غادرها القطار
+      final carSnap = await lastStopRef
+          .collection('carriages')
+          .orderBy('carriage_no')
+          .get();
+
+      if (carSnap.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _infoMessage =
+              'لا توجد بيانات ازدحام للمقطورات حتى الآن. قد يكون القطار شبه خالي أو لم يغادر بعد.';
+          _error = null;
+          _carriages = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      final carriages = carSnap.docs.map((doc) {
+        final data = doc.data();
+
+        final numRaw = data['carriage_no'];
+        final occRaw = data['occupancy_pct'];
+        final typeRaw = data['carriage_type'] as String?;
+
+        final number = (numRaw is int)
+            ? numRaw
+            : (numRaw is num)
+                ? numRaw.toInt()
+                : 1;
+
+        final occ = (occRaw is num) ? occRaw.toDouble() : 0.0;
+
+        final className = _mapClassName(typeRaw);
+        final level = _getCrowdingLevel(occ);
+
         return CarriageData(
-          number: c['carriage_number'] ?? 1,
-          className: c['class_name'] ?? 'العامة',
-          crowdingPercent: (c['crowding_percent'] ?? 0).toDouble(),
+          number: number,
+          className: className,
+          crowdingPercent: occ,
+          crowdingLevel: level,
         );
       }).toList();
+
+      // لو كل النسب = 0 → قطار فاضي تقريبًا
+      final allZero = carriages.isNotEmpty &&
+          carriages.every((c) => c.crowdingPercent <= 0);
+
+      if (!mounted) return;
 
       setState(() {
         _carriages = carriages;
         _loading = false;
-        _usingMock = false;
+        _error = null;
+        _infoMessage = allZero
+            ? 'القطار شبه خالي الآن، جميع المقطورات تقريبًا فارغة. هذه فرصة ممتازة لاختيار المقطورة الأنسب لك.'
+            : null;
       });
+
+      _initAnimations();
     } catch (e) {
-      _useMockCarriages();
+      if (!mounted) return;
+      setState(() {
+        _error = 'حدث خطأ أثناء تحميل بيانات المقطورات. حاول مرة أخرى.';
+        _infoMessage = null;
+        _carriages = [];
+        _loading = false;
+      });
     }
   }
 
+  String _getCrowdingLevel(double percent) {
+    if (percent >= 80) return 'extreme';
+    if (percent >= 60) return 'high';
+    if (percent >= 40) return 'medium';
+    return 'low';
+  }
+
+  Color _colorForLevel(String level) {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'high':
+        return Colors.red;
+      case 'extreme':
+        return const Color.fromARGB(255, 122, 0, 0);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _labelForLevel(String level) {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return 'منخفض';
+      case 'medium':
+        return 'متوسط';
+      case 'high':
+        return 'مزدحم';
+      case 'extreme':
+        return 'شديد الازدحام';
+      default:
+        return 'غير معروف';
+    }
+  }
+
+  Widget _pulsingDot(Color color) {
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ScaleTransition(
+            scale: Tween<double>(begin: 1.0, end: 1.5).animate(
+              CurvedAnimation(
+                parent: _dotCtrl,
+                curve: Curves.easeOut,
+              ),
+            ),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.18),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          ScaleTransition(
+            scale: _dotScale,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.5),
+                    blurRadius: 4,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getGradientColorTop(double percent) {
-    if (percent >= 80) return const Color(0xFFD12027);
-    if (percent >= 50) return const Color(0xFFF68D39);
-    return const Color(0xFF43B649);
+    final level = _getCrowdingLevel(percent);
+    return _colorForLevel(level);
   }
 
   Color _getGradientColorBottom(double percent) {
-    if (percent >= 80) return const Color(0xFF8B0000);
-    if (percent >= 50) return const Color(0xFFFF6B35);
-    return const Color(0xFFFFC107);
+    final level = _getCrowdingLevel(percent);
+    switch (level.toLowerCase()) {
+      case 'low':
+        return const Color(0xFF4CAF50);
+      case 'medium':
+        return const Color(0xFFFF9800);
+      case 'high':
+        return const Color(0xFFF44336);
+      case 'extreme':
+        return const Color(0xFF8B0000);
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -139,21 +477,80 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             icon: const Icon(Icons.arrow_back, color: Colors.black),
             onPressed: () => Navigator.pop(context),
           ),
-
+          title: const Text(
+            'مقطورات القطار',
+            style: TextStyle(color: Colors.black),
+          ),
+          centerTitle: true,
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildTripInfoCard(),
-              const SizedBox(height: 32),
-              _buildTrainVisualization(),
-            ],
-          ),
-        ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTripInfoCard(),
+                    const SizedBox(height: 12),
+
+                    // رسالة خطأ (حمراء)
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: Colors.red, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // رسالة معلومات لطيفة (محطة أولى، قطار ما تحرك، قطار فاضي)
+                    if (_infoMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Colors.orange[700], size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _infoMessage!,
+                                style: TextStyle(
+                                  color: Colors.orange[800],
+                                  fontSize: 13,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 8),
+
+                    if (_carriages.isNotEmpty) ...[
+                      _buildCrowdingLegend(),
+                      const SizedBox(height: 24),
+                      Center(child: _buildTrainVisualization()),
+                    ],
+
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -162,7 +559,6 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // اسم المحطة
         Text(
           widget.stationName,
           style: const TextStyle(
@@ -171,10 +567,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             color: Colors.black,
           ),
         ),
-
         const SizedBox(height: 12),
-
-        // المسار
         Row(
           children: [
             const Text(
@@ -187,7 +580,8 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: widget.lineColor,
                 borderRadius: BorderRadius.circular(6),
@@ -203,10 +597,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             ),
           ],
         ),
-
         const SizedBox(height: 12),
-
-        // نحو
         Row(
           children: [
             Text(
@@ -219,10 +610,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             ),
           ],
         ),
-
         const SizedBox(height: 6),
-
-        // الوقت
         Row(
           children: [
             Text(
@@ -235,18 +623,12 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
             ),
           ],
         ),
-
         const SizedBox(height: 20),
-
-        // الخط الفاصل
         Container(
           height: 1,
           color: Colors.grey[300],
         ),
-
         const SizedBox(height: 20),
-
-        // عنوان معدل الزحمة - في النص تماماً
         const Center(
           child: Text(
             'معدل ازدحام المقطورات',
@@ -261,246 +643,306 @@ class _TrainCarriageViewState extends State<TrainCarriageView> {
     );
   }
 
-  Widget _buildTrainVisualization() {
-    const double carriageHeight = 130.0;
-    const double connectorHeight = 20.0;
-
-    return Column(
+  Widget _buildCrowdingLegend() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // القطار - الجزء الأيسر
-            Column(
-              children: List.generate(_carriages.length, (index) {
-                final carriage = _carriages[index];
-                final isFirst = index == 0;
-                final isLast = index == _carriages.length - 1;
+        _buildLegendItem('منخفض', Colors.green),
+        _buildLegendItem('متوسط', Colors.orange),
+        _buildLegendItem('مزدحم', Colors.red),
+        _buildLegendItem(
+            'شديد', const Color.fromARGB(255, 122, 0, 0)),
+      ],
+    );
+  }
 
-                return Column(
-                  children: [
-                    // الموصل بين العربات
-                    if (index > 0)
-                      Container(
-                        width: 85,
-                        height: connectorHeight,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // الخطوط الجانبية
-                            Positioned(
-                              left: 10,
-                              top: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 2.5,
-                                color: Colors.black,
-                              ),
-                            ),
-                            Positioned(
-                              right: 10,
-                              top: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 2.5,
-                                color: Colors.black,
-                              ),
-                            ),
-                            // الوصلة
-                            Center(
-                              child: Container(
-                                width: 50,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[400],
-                                  borderRadius: BorderRadius.circular(4.5),
-                                  border: Border.all(
-                                    color: Colors.grey[600]!,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // العربة
-                    Container(
-                      width: 85,
-                      height: carriageHeight,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            _getGradientColorTop(carriage.crowdingPercent),
-                            _getGradientColorBottom(carriage.crowdingPercent),
-                          ],
-                        ),
-                        border: Border.all(color: Colors.black, width: 3.5),
-                        borderRadius: isFirst
-                            ? const BorderRadius.vertical(
-                            top: Radius.circular(26))
-                            : isLast
-                            ? const BorderRadius.vertical(
-                            bottom: Radius.circular(26))
-                            : BorderRadius.zero,
-                      ),
-                      child: Column(
-                        children: [
-                          // رأس العربة الأولى
-                          if (isFirst)
-                            Container(
-                              height: 30,
-                              decoration: const BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.vertical(
-                                  top: Radius.circular(22),
-                                ),
-                              ),
-                            ),
-
-                          // النوافذ
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 11,
-                                vertical: isFirst || isLast ? 8 : 12,
-                              ),
-                              child: Column(
-                                children: List.generate(
-                                  3,
-                                      (windowIndex) => Expanded(
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(
-                                          vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: Colors.grey[400]!,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // ذيل العربة الأخيرة
-                          if (isLast)
-                            Container(
-                              height: 30,
-                              decoration: const BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.vertical(
-                                  bottom: Radius.circular(22),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-
-            const SizedBox(width: 16),
-
-            // الأسهم المنقطة
-            Column(
-              children: List.generate(_carriages.length, (index) {
-                return Column(
-                  children: [
-                    if (index > 0) const SizedBox(height: connectorHeight),
-                    Container(
-                      height: carriageHeight,
-                      width: 35,
-                      child: CustomPaint(
-                        size: Size(35, carriageHeight),
-                        painter: DashedArrowPainter(),
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-
-            const SizedBox(width: 8),
-
-            // المربعات - الجزء الأيمن (بنفس الحجم والمحتوى في النص)
-            Expanded(
-              child: Column(
-                children: List.generate(_carriages.length, (index) {
-                  final carriage = _carriages[index];
-
-                  return Column(
-                    children: [
-                      if (index > 0) const SizedBox(height: connectorHeight),
-                      Container(
-                        height: carriageHeight,
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _getBorderColor(carriage.crowdingPercent),
-                            width: 2.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                carriage.className,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                '${carriage.crowdingPercent.toInt()}%',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: _getTextColor(carriage.crowdingPercent),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-          ],
+  Widget _buildLegendItem(String text, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
   }
 
-  Color _getBorderColor(double percent) {
-    if (percent >= 80) return const Color(0xFFD12027);
-    if (percent >= 50) return const Color(0xFFF68D39);
-    return const Color(0xFF43B649);
-  }
+  Widget _buildTrainVisualization() {
+    const double carriageHeight = 130.0;
+    const double connectorHeight = 20.0;
 
-  Color _getTextColor(double percent) {
-    if (percent >= 80) return const Color(0xFFD12027);
-    if (percent >= 50) return const Color(0xFFF68D39);
-    return const Color(0xFF43B649);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // القطار نفسه
+        Column(
+          children: List.generate(_carriages.length, (index) {
+            final carriage = _carriages[index];
+            final isFirst = index == 0;
+            final isLast = index == _carriages.length - 1;
+
+            return Column(
+              children: [
+                if (index > 0)
+                  SizedBox(
+                    width: 85,
+                    height: connectorHeight,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Positioned(
+                          left: 10,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 2.5,
+                            color: Colors.black,
+                          ),
+                        ),
+                        Positioned(
+                          right: 10,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 2.5,
+                            color: Colors.black,
+                          ),
+                        ),
+                        Center(
+                          child: Container(
+                            width: 50,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[400],
+                              borderRadius: BorderRadius.circular(4.5),
+                              border: Border.all(
+                                color: Colors.grey[600]!,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                AnimatedBuilder(
+                  animation: (index < _fillAnimations.length)
+                      ? _fillAnimations[index]
+                      : const AlwaysStoppedAnimation<double>(1.0),
+                  builder: (context, child) {
+                    final animValue = (index < _fillAnimations.length)
+                        ? _fillAnimations[index].value
+                        : 1.0;
+
+                    return ClipRRect(
+                      borderRadius: isFirst
+                          ? const BorderRadius.vertical(
+                              top: Radius.circular(26),
+                            )
+                          : isLast
+                              ? const BorderRadius.vertical(
+                                  bottom: Radius.circular(26),
+                                )
+                              : BorderRadius.zero,
+                      child: Container(
+                        width: 85,
+                        height: carriageHeight,
+                        decoration: BoxDecoration(
+                          border:
+                              Border.all(color: Colors.black, width: 3.5),
+                          borderRadius: isFirst
+                              ? const BorderRadius.vertical(
+                                  top: Radius.circular(10),
+                                )
+                              : isLast
+                                  ? const BorderRadius.vertical(
+                                      bottom: Radius.circular(26),
+                                    )
+                                  : BorderRadius.zero,
+                        ),
+                        child: Stack(
+                          children: [
+                            Container(color: Colors.grey[300]),
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: FractionallySizedBox(
+                                heightFactor: animValue,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        _getGradientColorTop(
+                                            carriage.crowdingPercent),
+                                        _getGradientColorBottom(
+                                            carriage.crowdingPercent),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Column(
+                              children: [
+                                if (isFirst)
+                                  Container(
+                                    height: 30,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 11,
+                                      vertical:
+                                          isFirst || isLast ? 8 : 12,
+                                    ),
+                                    child: Column(
+                                      children: List.generate(
+                                        3,
+                                        (windowIndex) => Expanded(
+                                          child: Container(
+                                            margin:
+                                                const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[200],
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: Colors.grey[400]!,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (isLast)
+                                  Container(
+                                    height: 30,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.vertical(
+                                        bottom: Radius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          }),
+        ),
+
+        const SizedBox(width: 16),
+
+        // السهم المتقطع
+        Column(
+          children: List.generate(_carriages.length, (index) {
+            return Column(
+              children: [
+                if (index > 0) const SizedBox(height: connectorHeight),
+                SizedBox(
+                  height: carriageHeight,
+                  width: 35,
+                  child: CustomPaint(
+                    size: const Size(35, carriageHeight),
+                    painter: DashedArrowPainter(),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ),
+
+        const SizedBox(width: 8),
+
+        // بطاقات المعلومات على اليمين
+        Column(
+          children: List.generate(_carriages.length, (index) {
+            final carriage = _carriages[index];
+            final color = _colorForLevel(carriage.crowdingLevel);
+            final label = _labelForLevel(carriage.crowdingLevel);
+
+            return Column(
+              children: [
+                if (index > 0) const SizedBox(height: connectorHeight),
+                Container(
+                  height: carriageHeight,
+                  width: 110,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: color,
+                      width: 2.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          carriage.className,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        _pulsingDot(color),
+                        const SizedBox(height: 12),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ),
+      ],
+    );
   }
 }
 
@@ -512,7 +954,6 @@ class DashedArrowPainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
-    // رسم الخط المنقط الأفقي في النص
     const dashWidth = 5.0;
     const dashSpace = 4.0;
     double startX = 0;
@@ -527,7 +968,6 @@ class DashedArrowPainter extends CustomPainter {
       startX += dashWidth + dashSpace;
     }
 
-    // رسم رأس السهم (يشير لليمين) - معدل للمنتصف
     final arrowPaint = Paint()
       ..color = Colors.grey[500]!
       ..style = PaintingStyle.fill;
@@ -550,10 +990,12 @@ class CarriageData {
   final int number;
   final String className;
   final double crowdingPercent;
+  final String crowdingLevel;
 
   CarriageData({
     required this.number,
     required this.className,
     required this.crowdingPercent,
+    required this.crowdingLevel,
   });
 }
