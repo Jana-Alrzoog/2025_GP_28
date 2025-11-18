@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 # ------------------------------------------------------------
-# Project paths (relative to this file, NOT /content)
+# Project paths (relative to this file)
 # ------------------------------------------------------------
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SEED = os.path.join(ROOT, "data", "seeds")
@@ -101,7 +101,7 @@ print("base_day ready with:", base_day.columns.tolist())
 RIYADH_TZ = timezone(timedelta(hours=3))
 
 # ============================================================
-# 2) Load stations & basic capacity metadata
+# 2) Load stations & capacity metadata
 # ============================================================
 
 STATIONS_PATH = os.path.join(SEED, "stations.json")
@@ -116,7 +116,7 @@ print(f"Loaded {len(stations_list)} stations")
 
 stations_df = pd.json_normalize(stations_list)
 
-# Ensure required capacity fields
+# Ensure required capacity field exists
 if "capacity_station" not in stations_df.columns:
     stations_df["capacity_station"] = 2000
 
@@ -127,7 +127,7 @@ station_ids = capacity_df["station_id"].astype(str).unique().tolist()
 print("Station IDs loaded:", station_ids)
 
 # ============================================================
-# 3) Load Events + Holiday + Multipliers
+# 3) Load Events + Holidays + Multipliers
 # ============================================================
 
 EVENTS_CSV = os.path.join(SEED, "calendar_events.csv")
@@ -135,7 +135,7 @@ HOLIDAYS_CSV = os.path.join(SEED, "holidays.csv")
 
 
 def norm_date(x: str) -> str:
-    """Normalize date to 'YYYY-MM-DD' string or '' if invalid."""
+    """Return normalized 'YYYY-MM-DD' or empty string."""
     if x is None:
         return ""
     s = str(x).strip()
@@ -147,7 +147,7 @@ def norm_date(x: str) -> str:
     return "" if pd.isna(d) else d.strftime("%Y-%m-%d")
 
 
-# Load Holidays
+# Load holidays
 holiday_dates = set()
 if os.path.exists(HOLIDAYS_CSV):
     df_h = pd.read_csv(HOLIDAYS_CSV)
@@ -156,7 +156,7 @@ if os.path.exists(HOLIDAYS_CSV):
 
 print("Holiday dates loaded:", len(holiday_dates))
 
-# Load Calendar Events
+# Load calendar events
 event_rows = []
 if os.path.exists(EVENTS_CSV):
     with open(EVENTS_CSV, "r", encoding="utf-8") as f:
@@ -173,12 +173,12 @@ if os.path.exists(EVENTS_CSV):
 
 print("Loaded events:", len(event_rows))
 
-GLOBAL_EVENT_TYPES = {"SaudiNationalDay"}  # example
+GLOBAL_EVENT_TYPES = {"SaudiNationalDay"}
 
 event_types_map = {}  # (date, station_id) -> set(types)
 event_mult_override = {}  # (date, station_id) -> multiplier
-global_event_types_by_date = {}  # date -> set(types)
-global_event_mult_by_date = {}  # date -> multiplier
+global_event_types_by_date = {}
+global_event_mult_by_date = {}
 
 
 def _norm(x):
@@ -228,7 +228,7 @@ def list_event_types(date_str, station_id):
 
 
 def event_csv_multiplier(date_str, station_id):
-    """Return final event multiplier after combining local + global."""
+    """Return final event multiplier combining global + local."""
     m = 1.0
     key = (date_str, station_id)
 
@@ -236,7 +236,7 @@ def event_csv_multiplier(date_str, station_id):
         m *= event_mult_override[key]
 
     if date_str in global_event_mult_by_date:
-        m *= global_event_mult_by_date[date_str]
+        m *= global_event_mult_by_date[d]
 
     return float(m)
 
@@ -248,7 +248,7 @@ BASE_COL = "base_demand_norm" if "base_demand_norm" in base_day.columns else "ba
 
 
 def get_base_ratio(station_id, minute_of_day):
-    """Look up the base demand ratio (0..1) for a given station & minute."""
+    """Return base demand ratio (0..1) for a station and minute."""
     row = base_day[
         (base_day["station_id"] == station_id)
         & (base_day["minute_of_day"] == minute_of_day)
@@ -259,7 +259,7 @@ def get_base_ratio(station_id, minute_of_day):
 
 
 def get_capacity(station_id):
-    """Return total station capacity for a given station."""
+    """Return station capacity."""
     row = capacity_df[capacity_df["station_id"] == station_id]
     if len(row) == 0:
         return 0.0
@@ -267,14 +267,12 @@ def get_capacity(station_id):
 
 
 def demand_noise(mult=0.05):
-    """Small multiplicative noise in [1-mult, 1+mult]."""
+    """Random multiplicative noise in [1-mult, 1+mult]."""
     return 1.0 + np.random.uniform(-mult, mult)
 
 
 def classify_from_cap(station_total, capacity_station):
-    """
-    Classify crowding level based on utilization ratio (passengers / capacity).
-    """
+    """Classify crowding level by utilization ratio."""
     if capacity_station <= 0:
         return "Medium", 0.0
 
@@ -295,17 +293,43 @@ def classify_from_cap(station_total, capacity_station):
 NORMAL_PEAK_UTIL = 0.85
 CAP_BOOST_EVENT = 1.25
 
+# ============================================================
+# ⭐⭐ UPDATED: Pre-6:00 AM rule ⭐⭐
+# ============================================================
 
 def make_snapshot_for_station(station_id, dt):
     """
     Build an on-demand snapshot for a single station at a given datetime.
     """
+
+    # Ensure timezone
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=RIYADH_TZ)
 
     date_str = dt.strftime("%Y-%m-%d")
     minute_of_day = dt.hour * 60 + dt.minute
 
+    # ------------------------------------------------------------
+    # PRE-6:00 AM RULE
+    # The metro is closed before 6:00 AM.
+    # To avoid injecting invalid demand into the lag history,
+    # we return a consistent Low snapshot with 0 riders.
+    # ------------------------------------------------------------
+    if minute_of_day < 360:  # before 6:00 AM
+        cap = get_capacity(station_id)
+        return {
+            "timestamp": dt.isoformat(),
+            "station_id": station_id,
+            "station_total": 0,
+            "capacity_station": int(cap),
+            "load_ratio": 0.0,
+            "crowd_level": "Low",
+            "events": [],
+        }
+
+    # ============================================================
+    # Normal generation after 6:00 AM
+    # ============================================================
     base_ratio = get_base_ratio(station_id, minute_of_day)
     event_mult = event_csv_multiplier(date_str, station_id)
     holiday_mult = 0.7 if date_str in holiday_dates else 1.0
@@ -320,6 +344,7 @@ def make_snapshot_for_station(station_id, dt):
     ev_types = list_event_types(date_str, station_id)
     has_event = len(ev_types) > 0
 
+    # Cap demand according to event or normal peak limits
     if has_event:
         cap_limit = cap * CAP_BOOST_EVENT
     else:
@@ -341,8 +366,7 @@ def make_snapshot_for_station(station_id, dt):
 
 def generate_all_stations_snapshot(dt=None):
     """
-    Generates a snapshot for all stations at the same datetime.
-    Useful when the user opens the app (initial load).
+    Generate snapshot for all stations at a specific datetime.
     """
     if dt is None:
         dt = datetime.now(RIYADH_TZ)
@@ -355,9 +379,10 @@ def generate_all_stations_snapshot(dt=None):
     return snapshots
 
 
+# Local test
 if __name__ == "__main__":
-    # Optional local test
     now_riyadh = datetime.now(RIYADH_TZ)
     print("Test snapshot S1:", make_snapshot_for_station("S1", now_riyadh))
     all_now = generate_all_stations_snapshot()
     print("Total stations snapshot:", len(all_now))
+
