@@ -41,7 +41,7 @@ dependencies:
   shared_preferences: ^2.3.2
   geolocator: ^13.0.1
   http: ^1.1.0 
-  
+  lottie: ^3.1.0
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -80,7 +80,7 @@ flutter:
    - assets/images/MasarLogo.png
    - assets/data/riyadh_boundary.geojson
    - assets/data/metro_stations.json
-   
+   - assets/animations/loading.json
   fonts:
     - family: Handicrafts     
       fonts:

@@ -25,7 +25,6 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   static const LatLng _riyadhCenter = LatLng(24.7136, 46.6753);
-
   GoogleMapController? _map;
   final Set<Polygon> _polygons = {};
   final Set<Marker> _markers = {};
@@ -74,6 +73,8 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadStationIdMap();
+
+    
   }
 
   Future<void> _handleLocationOnFirstOpen() async {
@@ -161,6 +162,8 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   void dispose() {
+    
+
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();

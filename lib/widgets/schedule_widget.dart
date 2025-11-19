@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../../theme/text_utils.dart'; // عشان norm
-import '/screens/tabs/train_carriage_view.dart'; // عدّل المسار حسب مشروعك
-import '../../models/station.dart';
-
-/*==========================
-   Schedule Widget
- ==========================*/
+import '../../theme/text_utils.dart';
+import '/screens/tabs/train_carriage_view.dart';
 
 class ScheduleWidget extends StatelessWidget {
   final String stationName;

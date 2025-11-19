@@ -1,15 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 
 /*==========================
    Crowd Status Widget
+   - current: from /snapshot/{sid}
+   - future 30-min: from /predict_30min_live/{sid}
  ==========================*/
+
+const String kMasarApiBaseUrl = 'https://masar-sim.onrender.com';
 
 class CrowdStatusWidget extends StatefulWidget {
   final String? stationId;
 
-  const CrowdStatusWidget({required this.stationId});
+  const CrowdStatusWidget({required this.stationId, super.key});
 
   @override
   State<CrowdStatusWidget> createState() => CrowdStatusWidgetState();
@@ -19,7 +24,9 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     with SingleTickerProviderStateMixin {
   bool _loading = true;
   String? _error;
-  String? _crowdLevel; // Low / Medium / High / Extreme
+
+  String? _crowdLevel;  // Low / Medium / High / Extreme (الحالية)
+  String? _futureLevel; // Low / Medium / High / Extreme (التنبؤ)
 
   late final AnimationController _dotCtrl;
   late final Animation<double> _dotScale;
@@ -37,14 +44,14 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     );
     _dotCtrl.repeat(reverse: true);
 
-    _fetchSnapshot();
+    _fetchStatusAndForecast();
   }
 
   @override
   void didUpdateWidget(covariant CrowdStatusWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stationId != widget.stationId) {
-      _fetchSnapshot();
+      _fetchStatusAndForecast();
     }
   }
 
@@ -54,7 +61,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     super.dispose();
   }
 
-  Future<void> _fetchSnapshot() async {
+  Future<void> _fetchStatusAndForecast() async {
     final sid = widget.stationId;
 
     if (sid == null || sid.trim().isEmpty) {
@@ -65,27 +72,61 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       return;
     }
 
+    // 👈 نطبّع الـ stationId عشان نضمن الشكل S1, S2...
+    final raw = sid.trim();
+    final normalizedSid = raw.toUpperCase().startsWith('S')
+        ? raw.toUpperCase()
+        : 'S$raw';
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final url = Uri.parse('https://masar-sim.onrender.com/snapshot/$sid');
-      final res = await http.get(url);
+      // 1) الحالة الحالية من /snapshot/{sid}
+      final snapUrl =
+          Uri.parse('$kMasarApiBaseUrl/snapshot/$normalizedSid');
+      final snapRes = await http.get(snapUrl);
 
-      if (res.statusCode != 200) {
+      if (snapRes.statusCode != 200) {
         setState(() {
           _loading = false;
-          _error = 'تعذّر تحميل حالة الازدحام (كود ${res.statusCode}).';
+          _error = 'تعذّر تحميل حالة الازدحام (كود ${snapRes.statusCode}).';
         });
         return;
       }
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final snapData = jsonDecode(snapRes.body) as Map<String, dynamic>;
+      final currentLevel =
+          (snapData['crowd_level'] as String?) ?? 'Medium';
+
+      // 2) التنبؤ بعد 30 دقيقة من /predict_30min_live/{sid}
+      String? futureLevel;
+
+      try {
+        final predUrl = Uri.parse(
+            '$kMasarApiBaseUrl/predict_30min_live/$normalizedSid');
+        final predRes = await http.get(predUrl);
+
+        if (predRes.statusCode == 200) {
+          final predData =
+              jsonDecode(predRes.body) as Map<String, dynamic>;
+          // السيرفر يرجع crowd_level_30min
+          futureLevel =
+              (predData['crowd_level_30min'] as String?) ?? currentLevel;
+        } else {
+          // لو فشل التنبؤ، نخليها نفس الحالية
+          futureLevel = currentLevel;
+        }
+      } catch (_) {
+        // خطأ في الاتصال بالتنبؤ فقط → ما نطيح كل الودجت
+        futureLevel = currentLevel;
+      }
 
       setState(() {
-        _crowdLevel = (data['crowd_level'] as String?) ?? 'Medium';
+        _crowdLevel = currentLevel;
+        _futureLevel = futureLevel;
         _loading = false;
       });
     } catch (e) {
@@ -219,13 +260,22 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+      return Opacity(
+        opacity: 0.75,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Lottie.asset(
+              'assets/animations/loading.json',
+              width: 70,
+              height: 70,
+            ),
+          ),
         ),
-        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -244,12 +294,14 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       );
     }
 
-    final level = _crowdLevel ?? 'Medium';
-    final currentColor = _colorForLevel(level);
-    final currentLabel = _arabicLabel(level);
+    final levelNow = _crowdLevel ?? 'Medium';
+    final levelFuture = _futureLevel ?? levelNow;
 
-    final futureColor = currentColor;
-    final futureLabel = currentLabel;
+    final currentColor = _colorForLevel(levelNow);
+    final futureColor = _colorForLevel(levelFuture);
+
+    final currentLabel = _arabicLabel(levelNow);
+    final futureLabel = _arabicLabel(levelFuture);
 
     return Container(
       padding: const EdgeInsets.all(12),
