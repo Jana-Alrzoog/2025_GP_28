@@ -609,33 +609,39 @@ def delete_old(now):
     """
     Delete any tick older than 2 hours for all stations,
     keeping a rolling 2-hour window of live data.
+
+    Uses pagination (limit 300) per station to avoid exceeding
+    Firestore batch operation limits.
     """
     cutoff = now - timedelta(hours=2)
     db = get_firestore_client()
 
     stations = db.collection("live").stream()
-    deleted = 0
+    deleted_total = 0
 
     for station in stations:
-        ticks = (
-            station.reference
-            .collection("ticks")
-            .where("timestamp", "<", cutoff)
-            .stream()
-        )
+        ticks_ref = station.reference.collection("ticks")
 
-        batch = db.batch()
-        has = False
+        while True:
+            # Take a small batch of old docs per station
+            docs = list(
+                ticks_ref
+                .where("timestamp", "<", cutoff)
+                .limit(300)
+                .stream()
+            )
 
-        for doc in ticks:
-            batch.delete(doc.reference)
-            deleted += 1
-            has = True
+            if not docs:
+                # No more old docs for this station
+                break
 
-        if has:
+            batch = db.batch()
+            for doc in docs:
+                batch.delete(doc.reference)
+                deleted_total += 1
             batch.commit()
 
-    return deleted
+    return deleted_total
 
 
 @app.api_route("/tick_live", methods=["GET", "POST"])
