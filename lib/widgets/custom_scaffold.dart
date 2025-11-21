@@ -36,6 +36,7 @@ class CustomScaffold extends StatelessWidget {
         iconTheme: IconThemeData(color: appBarForeground),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        automaticallyImplyLeading: false,
       ),
       extendBodyBehindAppBar: true,
       body: Stack(

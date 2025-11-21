@@ -15,6 +15,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  String? _customError;
 
   @override
   void dispose() {
@@ -25,24 +26,70 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-    try {
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: _emailController.text.trim());
+    setState(() {
+      _isLoading = true;
+      _customError = null;
+    });
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ تم إرسال رابط استعادة كلمة المرور إلى بريدك')),
-      );
-      Navigator.pop(context); // الرجوع لصفحة تسجيل الدخول بعد الإرسال
+    try {
+      final email = _emailController.text.trim();
+
+      // 🔥 الحل: نستخدم createUserWithEmailAndPassword للتحقق
+      try {
+        // نحاول ننشئ حساب جديد بنفس الإيميل
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: 'TemporaryPassword123!', // باسورد مؤقت
+        );
+
+        // إذا وصلنا هنا، معناه الإيميل مو مسجل - نحذف الحساب المؤقت
+        await FirebaseAuth.instance.currentUser!.delete();
+
+        setState(() => _customError = 'خطأ في البريد الإلكتروني');
+        _formKey.currentState!.validate();
+        return;
+
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          // الإيميل مسجل - نكمل عملية إرسال رابط الاستعادة
+          await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(' تم إرسال رابط استعادة كلمة المرور إلى بريدك')),
+          );
+          Navigator.pop(context);
+          return;
+        }
+        throw e; // إذا كان خطأ ثاني نرميه
+      }
+
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'حدث خطأ أثناء إرسال البريد')),
-      );
+
+      if (e.code == 'invalid-email') {
+        setState(() => _customError = 'صيغة البريد الإلكتروني غير صحيحة');
+        _formKey.currentState!.validate();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'حدث خطأ أثناء إرسال البريد')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String? _emailValidator(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return 'الرجاء إدخال البريد الإلكتروني';
+    if (!EmailValidator.validate(text)) {
+      return 'صيغة البريد الإلكتروني غير صحيحة';
+    }
+    if (_customError != null) {
+      return _customError;
+    }
+    return null;
   }
 
   @override
@@ -82,74 +129,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                       const SizedBox(height: 40.0),
 
-                      // حقل البريد الإلكتروني
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-                          if (text.isEmpty) return 'الرجاء إدخال البريد الإلكتروني';
-                          if (!EmailValidator.validate(text)) {
-                            return 'صيغة البريد الإلكتروني غير صحيحة';
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        validator: _emailValidator,
+                        onChanged: (value) {
+                          if (_customError != null) {
+                            setState(() => _customError = null);
                           }
-                          return null;
                         },
-                        decoration: InputDecoration(
-                          labelText: 'البريد الإلكتروني',
-                          hintText: 'user@example.com',
-                          hintStyle: const TextStyle(color: Color(0x42000000)),
-
-                          // 👇 تغيير لون عنوان الحقل عند التركيز/الخطأ
-                          floatingLabelStyle: MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
-                              return const TextStyle(
-                                color: Color(0xFFBA1A1A),
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            if (states.contains(MaterialState.focused)) {
-                              return const TextStyle(
-                                color: Color(0xFF43B649), // أخضر عند التركيز
-                                fontWeight: FontWeight.w600,
-                              );
-                            }
-                            return const TextStyle(color: Colors.grey);
-                          }),
-
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Color(0x1F000000)),
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF43B649),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFFBA1A1A),
-                              width: 2.0,
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                          ),
+                        decoration: _decoration(
+                          label: 'البريد الإلكتروني',
+                          hint: 'user@example.com',
+                          focusColor: const Color(0xFF43B649),
                         ),
                       ),
 
                       const SizedBox(height: 30.0),
 
-                      // زر الإرسال
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -160,20 +158,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           onPressed: _isLoading ? null : _resetPassword,
                           child: _isLoading
                               ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                               : const Text('إرسال رابط الاستعادة'),
                         ),
                       ),
 
                       const SizedBox(height: 20.0),
 
-                      // رجوع
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: const Text('الرجوع لتسجيل الدخول'),
@@ -186,6 +183,44 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required String hint,
+    required Color focusColor,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.black26),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(26)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Colors.black12),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: focusColor, width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Color(0xFFBA1A1A), width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: Color(0xFFBA1A1A), width: 2.0),
+        borderRadius: BorderRadius.circular(26),
+      ),
+      floatingLabelStyle: MaterialStateTextStyle.resolveWith((states) {
+        if (states.contains(MaterialState.error)) {
+          return const TextStyle(color: Color(0xFFBA1A1A), fontWeight: FontWeight.w600);
+        }
+        if (states.contains(MaterialState.focused)) {
+          return TextStyle(color: focusColor, fontWeight: FontWeight.w600);
+        }
+        return const TextStyle(color: Colors.grey);
+      }),
     );
   }
 }

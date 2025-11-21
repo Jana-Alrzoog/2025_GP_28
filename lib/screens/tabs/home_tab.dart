@@ -205,9 +205,9 @@ class _HomeTabState extends State<HomeTab> {
             polygons: _polygons,
             markers: _markers,
             myLocationEnabled: _useLocation && _userLatLng != null,
-            myLocationButtonEnabled: _useLocation,
+            myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
-            compassEnabled: true,
+            compassEnabled: false,
             mapToolbarEnabled: false,
           ),
 
@@ -321,6 +321,38 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
           ),
+          Positioned(
+            right: 16,
+            bottom: 100, // فوق البوتوم نافيقيشن
+            child: FloatingActionButton(
+              heroTag: "locBtn",
+              backgroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.my_location, color: Color(0xFFD12027)),
+              onPressed: () async {
+                final pos = await LocationService.getCurrentPosition();
+                if (pos == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("لا يمكن تحديد موقعك حالياً")),
+                  );
+                  return;
+                }
+
+                final target = LatLng(pos.latitude, pos.longitude);
+
+                _map?.animateCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(
+                      target: target,
+                      zoom: 16,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
         ],
       ),
     );

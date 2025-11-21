@@ -5,7 +5,7 @@ import 'signup_screen.dart';
 import '../widgets/custom_scaffold.dart';
 import '../../theme/theme.dart';
 import 'home_shell.dart';
-import 'forgot_password_screen.dart'; // 👈 جديد
+import 'forgot_password_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -20,6 +20,8 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  String? _errorMessage;
+  bool _hasError = false;
 
   @override
   void dispose() {
@@ -31,7 +33,12 @@ class _SignInScreenState extends State<SignInScreen> {
   Future<void> _signIn() async {
     if (!_formSignInKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _hasError = false;
+    });
+
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -43,9 +50,32 @@ class _SignInScreenState extends State<SignInScreen> {
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'تعذر تسجيل الدخول')),
-      );
+
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني';
+          break;
+        case 'wrong-password':
+          errorMessage = 'كلمة المرور غير صحيحة';
+          break;
+        case 'invalid-email':
+          errorMessage = 'صيغة البريد الإلكتروني غير صحيحة';
+          break;
+        case 'user-disabled':
+          errorMessage = 'هذا الحساب معطل';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'تم محاولة الدخول عدة مرات، حاول لاحقاً';
+          break;
+        default:
+          errorMessage = 'المعلومات التي أدخلتها خاطئة';
+      }
+
+      setState(() {
+        _errorMessage = errorMessage;
+        _hasError = true;
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -103,8 +133,8 @@ class _SignInScreenState extends State<SignInScreen> {
                         decoration: InputDecoration(
                           labelText: 'البريد الإلكتروني',
                           floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
+                          MaterialStateTextStyle.resolveWith((states) {
+                            if (states.contains(MaterialState.error) || _hasError) {
                               return const TextStyle(
                                 color: Color(0xFFBA1A1A),
                                 fontWeight: FontWeight.w600,
@@ -124,12 +154,15 @@ class _SignInScreenState extends State<SignInScreen> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
+                            borderSide: BorderSide(
+                              color: _hasError ? const Color(0xFFBA1A1A) : Colors.black12,
+                              width: _hasError ? 2.0 : 1.0,
+                            ),
                             borderRadius: BorderRadius.circular(26),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF43B649),
+                            borderSide: BorderSide(
+                              color: _hasError ? const Color(0xFFBA1A1A) : const Color(0xFF43B649),
                               width: 2.0,
                             ),
                             borderRadius: BorderRadius.circular(26),
@@ -164,8 +197,8 @@ class _SignInScreenState extends State<SignInScreen> {
                         decoration: InputDecoration(
                           labelText: 'رمز المـرور',
                           floatingLabelStyle:
-                              MaterialStateTextStyle.resolveWith((states) {
-                            if (states.contains(MaterialState.error)) {
+                          MaterialStateTextStyle.resolveWith((states) {
+                            if (states.contains(MaterialState.error) || _hasError) {
                               return const TextStyle(
                                 color: Color(0xFFBA1A1A),
                                 fontWeight: FontWeight.w600,
@@ -185,12 +218,15 @@ class _SignInScreenState extends State<SignInScreen> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.black12),
+                            borderSide: BorderSide(
+                              color: _hasError ? const Color(0xFFBA1A1A) : Colors.black12,
+                              width: _hasError ? 2.0 : 1.0,
+                            ),
                             borderRadius: BorderRadius.circular(26),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(
-                              color: Color(0xFF984C9D),
+                            borderSide: BorderSide(
+                              color: _hasError ? const Color(0xFFBA1A1A) : const Color(0xFF984C9D),
                               width: 2.0,
                             ),
                             borderRadius: BorderRadius.circular(26),
@@ -211,7 +247,34 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 25.0),
+                      const SizedBox(height: 15.0),
+
+                      // ✅ رسالة الخطأ - الأيقونة بعد النص وفي المنتصف
+                      if (_errorMessage != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center, // ✅ النص في الوسط
+                            children: [
+                              Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFBA1A1A),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 6), // ✅ مسافة بين النص والأيقونة
+                              const Icon(
+                                Icons.error_outline,
+                                color: Color(0xFFBA1A1A),
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
 
                       // نسيت كلمة المرور → يفتح شاشة جديدة
                       Row(
@@ -249,13 +312,13 @@ class _SignInScreenState extends State<SignInScreen> {
                           onPressed: _isLoading ? null : _signIn,
                           child: _isLoading
                               ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                               : const Text('تسجيـل دخـول'),
                         ),
                       ),

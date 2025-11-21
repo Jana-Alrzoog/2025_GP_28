@@ -1,9 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/signin_screen.dart'; // المسار الصحيح إلى صفحة تسجيل الدخول
+import '../../screens/signin_screen.dart';
 import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
+
+// تم إضافة دالة التوست هنا
+void showTopToast(BuildContext context, String message) {
+  final overlay = Overlay.of(context);
+  final overlayEntry = OverlayEntry(
+    builder: (context) => Positioned(
+      top: 70,
+      left: 20,
+      right: 20,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF964C9B),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  overlay.insert(overlayEntry);
+  Future.delayed(const Duration(seconds: 3), () => overlayEntry.remove());
+}
+
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
@@ -38,18 +86,19 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  // 🔥 تم تعديل دالة تسجيل الخروج بالكامل
   Future<void> _confirmSignOut(BuildContext context) async {
     final shouldLogout = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black26, // ظل بسيط للخلفية
+      barrierColor: Colors.black26,
       builder: (context) => Dialog(
-        alignment: Alignment.center, // ✅ في المنتصف
-        backgroundColor: Colors.white, // ✅ خلفية بيضاء
+        alignment: Alignment.center,
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
         child: Container(
-          width: 300, // ✅ شكل مستطيل أنيق مثل البطاقة
+          width: 300,
           height: 200,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
           child: Column(
@@ -75,7 +124,6 @@ class _ProfileTabState extends State<ProfileTab> {
                 ],
               ),
 
-              // ===== الأزرار متوازنة =====
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -117,25 +165,15 @@ class _ProfileTabState extends State<ProfileTab> {
     if (shouldLogout == true) {
       await FirebaseAuth.instance.signOut();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(top: 0),
-          content: const Text(
-            'تم تسجيل الخروج بنجاح 👋',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16),
-          ),
-          duration: const Duration(seconds: 2),
-          backgroundColor: const Color(0xFF964C9B),
-        ),
-      );
+      if (mounted) {
+        showTopToast(context, "تم تسجيل الخروج");
 
-      await Future.delayed(const Duration(seconds: 1));
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const SignInScreen()),
-      );
+        await Future.delayed(const Duration(milliseconds: 1500));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SignInScreen()),
+        );
+      }
     }
   }
 
@@ -157,7 +195,6 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ),
 
-              // ===== 🟣 اللوقو بدل دائرة البروفايل =====
               Positioned.fill(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -180,7 +217,6 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ),
 
-              // ===== 💳 البطاقة =====
               Positioned(
                 left: 36,
                 right: 36,
@@ -255,7 +291,6 @@ class _ProfileTabState extends State<ProfileTab> {
                             ],
                           ),
 
-                          // ===== 📍 اللوقو في الزاوية السفلية اليسرى تمامًا =====
                           Positioned(
                             bottom: 0,
                             left: 0,
@@ -302,7 +337,7 @@ class _ProfileTabState extends State<ProfileTab> {
               childAspectRatio: 1.5,
               children: [
                 _ToggleTile(title: 'الإشعارات'),
-               const _LocationToggleTile(),
+                const _LocationToggleTile(),
                 _Tile(
                   title: 'تسجيل خروج',
                   icon: Icons.logout,
@@ -326,7 +361,8 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 }
 
-// ===== 🔘 المربعات اللي فيها Toggle =====
+// ===== باقي الصفحة كما هي بدون تغيير =====
+
 class _ToggleTile extends StatefulWidget {
   final String title;
   const _ToggleTile({required this.title, super.key});
@@ -353,6 +389,11 @@ class _ToggleTileState extends State<_ToggleTile> {
               value: isOn,
               onChanged: (v) => setState(() => isOn = v),
               activeColor: const Color(0xFF964C9B),
+              trackOutlineColor: MaterialStateProperty.resolveWith<Color?>(
+                    (Set<MaterialState> states) {
+                  return const Color(0xFF964C9B);
+                },
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -415,8 +456,7 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('لم يتم منح صلاحية الموقع من النظام. فعّلها من إعدادات الجهاز.'),
+          content: Text('لم يتم منح صلاحية الموقع من النظام. فعّلها من إعدادات الجهاز.'),
         ),
       );
       return;
@@ -446,10 +486,15 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
               value: _isOn,
               onChanged: _onChanged,
               activeColor: const Color(0xFF964C9B),
+              trackOutlineColor: MaterialStateProperty.resolveWith<Color?>(
+                    (Set<MaterialState> states) {
+                  return const Color(0xFF964C9B);
+                },
+              ),
             ),
             const SizedBox(height: 8),
             const Text(
-              'مشاركة الموقع', // 👈 اسم الكرت
+              'مشاركة الموقع',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -463,8 +508,6 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
   }
 }
 
-
-// ===== 🔘 المربعات العادية =====
 class _Tile extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -512,7 +555,6 @@ class _Tile extends StatelessWidget {
   }
 }
 
-// ===== ✂️ الانحناء السفلي =====
 class _BottomCurveClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {

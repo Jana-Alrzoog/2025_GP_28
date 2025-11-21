@@ -52,7 +52,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _updatePasswordRules() {
     final p = _passwordController.text;
     setState(() {
-      _pwHasMinLen  = p.length >= 8;
+      _pwHasMinLen  = p.length >= 12 ;
       _pwHasDigit   = RegExp(r'[0-9\u0660-\u0669]').hasMatch(p); // يدعم 0-9 والأرقام العربية
       _pwHasUpper   = RegExp(r'[A-Z]').hasMatch(p);
       _pwHasLower   = RegExp(r'[a-z]').hasMatch(p);              // 👈 جديد
@@ -74,7 +74,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String? _passwordValidator(String? value) {
     final password = value ?? '';
     if (password.isEmpty) return 'الرجاء إدخال رمز المرور';
-    if (!_pwHasMinLen)   return 'كلمة المرور يجب أن تكون 8 رموز على الأقل';
+    if (!_pwHasMinLen)   return 'كلمة المرور يجب أن تكون 12 رموز على الأقل';
     if (!_pwHasDigit)    return 'يجب أن تحتوي على رقم واحد على الأقل';
     if (!_pwHasUpper)    return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
     if (!_pwHasLower)    return 'يجب أن تحتوي على حرف صغير واحد على الأقل'; // 👈 جديد
@@ -158,6 +158,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       // الاسم
                       TextFormField(
                         controller: _nameController,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         validator: (value) {
                           final v = (value ?? '').trim();
                           if (v.isEmpty) return 'الاســم مطلوب';
@@ -177,6 +178,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       // الايميل
                       TextFormField(
                         controller: _emailController,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         validator: (value) {
@@ -197,6 +199,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                       // كلمة المرور
                       TextFormField(
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         controller: _passwordController,
                         focusNode: _pwFocusNode,
                         obscureText: true,
@@ -228,6 +231,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                       // تأكيد كلمة المرور (أزرق)
                       TextFormField(
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         controller: _confirmController,
                         obscureText: true,
                         obscuringCharacter: '*',
@@ -362,7 +366,7 @@ class _PasswordRules extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ruleRow('٨ رموز فأكثر', hasMinLen, style: textStyle),
+        _ruleRow('12 رموز فأكثر', hasMinLen, style: textStyle),
         _ruleRow('رقم واحد على الأقل', hasDigit, style: textStyle),
         _ruleRow('حرف كبير واحد على الأقل (A-Z)', hasUpper, style: textStyle),
         _ruleRow('حرف صغير واحد على الأقل (a-z)', hasLower, style: textStyle), // 👈 جديد
