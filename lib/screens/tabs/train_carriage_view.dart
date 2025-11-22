@@ -33,8 +33,8 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
     with TickerProviderStateMixin {
   bool _loading = true;
 
-  String? _error;        // أخطاء حقيقية
-  String? _infoMessage;  // حالات طبيعية (محطة أولى، قطار ما تحرك، قطار فاضي)
+  String? _error;       
+  String? _infoMessage; 
 
   List<CarriageData> _carriages = [];
   List<AnimationController> _fillControllers = [];
@@ -101,7 +101,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
     super.dispose();
   }
 
-  /// ماب لأنواع المقطورات لأسماء عربية
+ 
   String _mapClassName(String? rawType) {
     final t = (rawType ?? '').toLowerCase().trim();
     if (t == 'vip') {
@@ -118,11 +118,11 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
   }
 
   // =========================
-  //  🔥 الربط مع Firestore + منطق التتبع
+  //   Firestore 
   // =========================
   Future<void> _fetchCarriageData() async {
     try {
-      const monthKey = '2025-11_12'; // نفس المفتاح المستخدم في سكربت الرفع
+      const monthKey = '2025-11_12';
       final fs = FirebaseFirestore.instance;
 
       // trips_month / 2025-11_12 / trips / {tripId}
@@ -132,7 +132,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
           .collection('trips')
           .doc(widget.tripId);
 
-      // 1) stop الخاص بالمحطة الحالية في هذه الرحلة
+      // 1) stop 
       final currentStopsSnap = await tripRef
           .collection('stops')
           .where('station_id', isEqualTo: widget.stationId)
@@ -154,7 +154,6 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
       final currentStopDoc = currentStopsSnap.docs.first;
       final currentData = currentStopDoc.data();
 
-      // رقم التوقف للمحطة الحالية
       int currentSeq;
       try {
         currentSeq = int.parse(currentStopDoc.id);
@@ -169,7 +168,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         }
       }
 
-      // 2) كل التوقفات لهذه الرحلة
+      // 2) all stops for this trip
       final allStopsSnap = await tripRef.collection('stops').get();
 
       if (allStopsSnap.docs.isEmpty) {
@@ -183,7 +182,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         return;
       }
 
-      // نبني ميتاداتا لكل stop
+     
       final stopsMeta = <Map<String, dynamic>>[];
 
       for (final d in allStopsSnap.docs) {
@@ -230,19 +229,18 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         return;
       }
 
-      // أول محطة في الرحلة (أقل stop_sequence)
       int firstSeq = stopsMeta.first['seq'] as int;
       for (final m in stopsMeta) {
         final s = m['seq'] as int;
         if (s < firstSeq) firstSeq = s;
       }
 
-      // 3) لو هذه أول محطة في الرحلة → حالة طبيعية
+      // 3) first station in the line
       if (currentSeq <= firstSeq) {
         if (!mounted) return;
         setState(() {
           _infoMessage =
-              'هذه هي المحطة الأولى في هذه الرحلة. سيتم عرض ازدحام المقطورات بعد تحرك القطار من هنا.';
+              'هذه هي المحطة الأولى في هذا المسار. لا يمكن عرض بيانات الازدحام للمقطورات لكونها اول انطلاقة.';
           _error = null;
           _carriages = [];
           _loading = false;
@@ -250,10 +248,10 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         return;
       }
 
-      // 4) نحدد "الوقت الحالي" (UTC)
+      // 4) current time (UTC)
       final nowUtc = DateTime.now().toUtc();
 
-      // آخر محطة غادرها القطار (departure <= now) وقبل محطتك
+      //  (departure <= now)
       Map<String, dynamic>? lastDeparted;
       for (final m in stopsMeta) {
         final seq = m['seq'] as int;
@@ -274,12 +272,12 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         }
       }
 
-      // 5) ما فيه محطة قبل محطتك غادرت فعليًا → الرحلة ما بدأت لسه بالنسبة لك
+      // 5) the trip did not start yet
       if (lastDeparted == null) {
         if (!mounted) return;
         setState(() {
           _infoMessage =
-              'القطار لم يغادر المحطة الأولى بعد بالنسبة لهذه الرحلة. سيتم عرض ازدحام المقطورات عند تحركه.';
+              'القطار لم يغادر المحطة الأولى بعد لهذه الرحلة. سيتم عرض ازدحام المقطورات عند تحركه.';
           _error = null;
           _carriages = [];
           _loading = false;
@@ -289,7 +287,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
 
       final lastStopRef = lastDeparted['ref'] as DocumentReference;
 
-      // 6) carriages للمحطة الأخيرة اللي غادرها القطار
+      // 6) carriages for last dest
       final carSnap = await lastStopRef
           .collection('carriages')
           .orderBy('carriage_no')
@@ -333,7 +331,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         );
       }).toList();
 
-      // لو كل النسب = 0 → قطار فاضي تقريبًا
+     
       final allZero = carriages.isNotEmpty &&
           carriages.every((c) => c.crowdingPercent <= 0);
 
@@ -493,7 +491,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
                     _buildTripInfoCard(),
                     const SizedBox(height: 12),
 
-                    // رسالة خطأ (حمراء)
+                   
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
@@ -516,7 +514,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
                         ),
                       ),
 
-                    // رسالة معلومات لطيفة (محطة أولى، قطار ما تحرك، قطار فاضي)
+                   
                     if (_infoMessage != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16.0),
@@ -886,7 +884,6 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
 
         const SizedBox(width: 8),
 
-        // بطاقات المعلومات على اليمين
         Column(
           children: List.generate(_carriages.length, (index) {
             final carriage = _carriages[index];
