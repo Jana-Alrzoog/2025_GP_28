@@ -67,12 +67,12 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     if (sid == null || sid.trim().isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'لا يوجد معرّف لهذه المحطة.';
+        _error = 'لا يوجد معلومات لهذه المحطة.';
       });
       return;
     }
 
-    // 👈 نطبّع الـ stationId عشان نضمن الشكل S1, S2...
+   
     final raw = sid.trim();
     final normalizedSid = raw.toUpperCase().startsWith('S')
         ? raw.toUpperCase()
@@ -84,7 +84,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     });
 
     try {
-      // 1) الحالة الحالية من /snapshot/{sid}
+      // 1) /snapshot/{sid}
       final snapUrl =
           Uri.parse('$kMasarApiBaseUrl/snapshot/$normalizedSid');
       final snapRes = await http.get(snapUrl);
@@ -92,7 +92,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       if (snapRes.statusCode != 200) {
         setState(() {
           _loading = false;
-          _error = 'تعذّر تحميل حالة الازدحام (كود ${snapRes.statusCode}).';
+          _error = 'تعذّر تحميل حالة الازدحام.';
         });
         return;
       }
@@ -101,7 +101,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       final currentLevel =
           (snapData['crowd_level'] as String?) ?? 'Medium';
 
-      // 2) التنبؤ بعد 30 دقيقة من /predict_30min_live/{sid}
+      // 2) /predict_30min_live/{sid}
       String? futureLevel;
 
       try {
@@ -112,15 +112,14 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
         if (predRes.statusCode == 200) {
           final predData =
               jsonDecode(predRes.body) as Map<String, dynamic>;
-          // السيرفر يرجع crowd_level_30min
+          // server return crowd_level_30min
           futureLevel =
               (predData['crowd_level_30min'] as String?) ?? currentLevel;
         } else {
-          // لو فشل التنبؤ، نخليها نفس الحالية
           futureLevel = currentLevel;
         }
       } catch (_) {
-        // خطأ في الاتصال بالتنبؤ فقط → ما نطيح كل الودجت
+        
         futureLevel = currentLevel;
       }
 
@@ -140,7 +139,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
   String _arabicLabel(String level) {
     switch (level.toLowerCase()) {
       case 'low':
-        return 'سلس';
+        return 'منخفض';
       case 'medium':
         return 'متوسط';
       case 'high':

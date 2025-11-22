@@ -18,12 +18,12 @@ class ScheduleWidget extends StatelessWidget {
     required this.stationIdMap,
   });
 
-  // ========= وجهة الرحلة (Destination) =========
+  // =========  (Destination) =========
 
-  // كاش: tripId -> end_code
+
   static final Map<String, String?> _tripEndCache = {};
 
-  // أسماء محتملة لحقل الوجهة داخل وثيقة الرحلة
+  
   static const List<String> _tripEndCandidates = [
     'end_station_code',
     'endStationCode',
@@ -34,7 +34,6 @@ class ScheduleWidget extends StatelessWidget {
     'end_code',
   ];
 
-  // اقرأ الوجهة من وثيقة الرحلة الأم
   Future<String?> _getTripEndCodeFromTrip(DocumentReference tripRef) async {
     final tripId = tripRef.id;
     if (_tripEndCache.containsKey(tripId)) return _tripEndCache[tripId];
@@ -54,8 +53,6 @@ class ScheduleWidget extends StatelessWidget {
     _tripEndCache[tripId] = code;
     return code;
   }
-
-  // حوّل كود الوجهة لاسم عربي من station_id_map (يدعم سلاسل متعددة مفصولة /)
   String? _resolveEndName(String? code) {
     if (code == null || code.trim().isEmpty) return null;
     final cu = code.trim().toUpperCase();
@@ -70,7 +67,7 @@ class ScheduleWidget extends StatelessWidget {
       for (final v in variants) {
         final vv = v.trim().toUpperCase();
         if (vv == cu || vv.contains(cu) || cu.contains(vv)) {
-          // رجّع أول نص عربي موجود
+          
           for (final p in variants) {
             if (RegExp(r'[\u0600-\u06FF]').hasMatch(p)) {
               return p.trim();
@@ -88,14 +85,14 @@ bool _isTerminalHere({
 }) {
   final currentId = stationId.trim().toUpperCase();
 
-  // 1) مقارنة بالكود مباشرة
+ 
   if (destCode != null &&
       destCode.trim().isNotEmpty &&
       destCode.trim().toUpperCase() == currentId) {
     return true;
   }
 
-  // 2) مقارنة بأسماء المحطة من الـ stationIdMap
+ 
   final mapping = stationIdMap[currentId];
   if (mapping != null && mapping.trim().isNotEmpty && destName != null) {
     final nd = norm(destName);
@@ -108,7 +105,7 @@ bool _isTerminalHere({
     }
   }
 
-  // 3) fallback: مقارنة بالاسم المباشر (نادرًا نحتاجه)
+ 
   if (destName != null &&
       norm(destName) == norm(stationName)) {
     return true;
@@ -308,7 +305,7 @@ bool _isTerminalHere({
                 timeStr = _formatFromTimestamp(ts);
               }
 
-              // 1) نحاول نقرأ الوجهة مباشرة من stop
+              // 1) read stop dec
               String? endCode =
               (data['end_station_code'] as String?)?.trim();
               if (endCode == null || endCode.isEmpty) {
@@ -346,7 +343,7 @@ bool _isTerminalHere({
                   final destName =
                       _resolveEndName(code) ?? 'وجهة غير معروفة';
 
-                  // لو الوجهة هي نفس المحطة ما نعرض الصف
+                // if the current station is the final dest 
                  if (_isTerminalHere(destCode: code, destName: destName)) {
                   return const SizedBox.shrink();
                 }
