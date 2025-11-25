@@ -4,9 +4,6 @@ import '/widgets/crowd_status_widget.dart';
 import '/widgets/schedule_widget.dart';
 import '../../models/station.dart';
 
-/*==========================
-   Bottom Sheet: Station
- ==========================*/
 class StationSheet extends StatefulWidget {
   final Station station;
   final ScrollController scrollController;
@@ -23,8 +20,6 @@ class StationSheet extends StatefulWidget {
 }
 
 class _StationSheetState extends State<StationSheet> {
-  bool _isExpanded = false;
-
   String? _resolveStationId({
     required String stationNameAr,
     required String? stationNameEn,
@@ -99,234 +94,130 @@ class _StationSheetState extends State<StationSheet> {
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: FractionallySizedBox(
-        heightFactor: _isExpanded ? 1.0 : 0.43,
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Header مع زر الإغلاق فقط عندما تكون ممدودة (فل سكرين)
-              if (_isExpanded)
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.close, size: 24),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                ),
-
-              // Handle للسحب - يظهر فقط عندما لا تكون ممدودة
-              if (!_isExpanded)
-                GestureDetector(
-                  onTap: () {
-                    setState(() => _isExpanded = true);
-                  },
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8.0, bottom: 4),
-                      child: Center(
-                        child: Container(
-                          width: 42,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // المحتوى الرئيسي - كله يقبل السحب لأعلى
-              Expanded(
-                child: GestureDetector(
-                  onVerticalDragUpdate: (details) {
-                    if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                      setState(() => _isExpanded = true);
-                    }
-                  },
-                  child: ListView(
-                    controller: widget.scrollController,
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      _isExpanded ? 8 : 16,
-                      20,
-                      32,
-                    ),
-                    children: [
-                      if (!_isExpanded) const SizedBox(height: 8),
-
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          widget.station.name,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // المسارات
-                      GestureDetector(
-                        onVerticalDragUpdate: (details) {
-                          if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                            setState(() => _isExpanded = true);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Text(
-                                'المسارات:',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (int i = 0; i < widget.station.colors.length; i++)
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: widget.station.colors[i],
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '${colorToLineNumber[widget.station.colors[i]] ?? (i + 1)}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // حالة الازدحام
-                      GestureDetector(
-                        onVerticalDragUpdate: (details) {
-                          if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                            setState(() => _isExpanded = true);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'حالة الازدحام',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      GestureDetector(
-                        onVerticalDragUpdate: (details) {
-                          if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                            setState(() => _isExpanded = true);
-                          }
-                        },
-                        child: CrowdStatusWidget(stationId: stationId),
-                      ),
-                      const SizedBox(height: 24),
-
-                      const Divider(thickness: 1.1),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'الجدول الزمني',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      if (stationId != null)
-                        GestureDetector(
-                          onVerticalDragUpdate: (details) {
-                            if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                              setState(() => _isExpanded = true);
-                            }
-                          },
-                          child: ScheduleWidget(
-                            stationId: stationId,
-                            stationName: widget.station.name,
-                            colors: widget.station.colors,
-                            colorToLineNumber: colorToLineNumber,
-                            stationIdMap: widget.stationIdMap,
-                          ),
-                        )
-                      else
-                        GestureDetector(
-                          onVerticalDragUpdate: (details) {
-                            if (!_isExpanded && details.primaryDelta != null && details.primaryDelta! < -10) {
-                              setState(() => _isExpanded = true);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'لا توجد بيانات جدولة متاحة لهذه المحطة',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+      child: ListView(
+        controller: widget.scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        children: [
+          // اسم المحطة
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              widget.station.name,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
               ),
-            ],
+            ),
           ),
-        ),
+
+          const SizedBox(height: 16),
+
+          // المسارات
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'المسارات:',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (int i = 0; i < widget.station.colors.length; i++)
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: widget.station.colors[i],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${colorToLineNumber[widget.station.colors[i]] ?? (i + 1)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // حالة الازدحام
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'حالة الازدحام',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.black,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          CrowdStatusWidget(stationId: stationId),
+
+          const SizedBox(height: 24),
+
+          const Divider(thickness: 1.1),
+
+          const SizedBox(height: 10),
+          const Text(
+            'الجدول الزمني',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          if (stationId != null)
+            ScheduleWidget(
+              stationId: stationId,
+              stationName: widget.station.name,
+              colors: widget.station.colors,
+              colorToLineNumber: colorToLineNumber,
+              stationIdMap: widget.stationIdMap,
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'لا توجد بيانات جدولة متاحة لهذه المحطة',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+        ],
       ),
     );
   }

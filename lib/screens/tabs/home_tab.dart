@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'; // 👈 ضيفي هذا السطر
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '/services/location_service.dart';
@@ -12,6 +13,7 @@ import '../../theme/text_utils.dart';
 import 'station_sheet.dart';
 import '../../models/station.dart';
 import '/services/station_loader.dart';
+
 // Base URL for Masar snapshot API (FastAPI on Render)
 const String kMasarApiBaseUrl = "https://masar-sim.onrender.com";
 
@@ -74,7 +76,7 @@ class _HomeTabState extends State<HomeTab> {
     super.initState();
     _loadStationIdMap();
 
-    
+
   }
 
   Future<void> _handleLocationOnFirstOpen() async {
@@ -162,7 +164,7 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   void dispose() {
-    
+
 
     _searchCtrl.dispose();
     _searchFocus.dispose();
@@ -464,32 +466,86 @@ class _HomeTabState extends State<HomeTab> {
     }
     _sheetOpen = true;
 
-    Future.microtask(() {
-      final realCtx = _scaffoldKey.currentContext ?? context;
+    final realCtx = _scaffoldKey.currentContext ?? context;
 
-      // كنترولر للـ ListView داخل الشيت
-      final scrollController = ScrollController();
+    showModalBottomSheet(
+      context: realCtx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      isDismissible: true,
+      enableDrag: true,
+      builder: (ctx) {
+        double childSize = 0.32; // الوضع الأساسي
 
-      showModalBottomSheet(
-        context: realCtx,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        barrierColor: Colors.black54,
-        isDismissible: false, // ما يتسكر بالضغط على الخلفية
-        enableDrag: false,    // وما يتسكر بالسحب
-        builder: (ctx) {
-          return StationSheet(
-            station: st,
-            scrollController: scrollController,
-            stationIdMap: _stationIdMap,
-          );
-        },
-      ).whenComplete(() {
-        _sheetOpen = false;
-      });
+        return StatefulBuilder(
+          builder: (context, setStateSheet) {
+            return GestureDetector(
+              onVerticalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+
+                // سحب خفيف للأعلى → يرتفع
+                if (velocity < -50) {
+                  setStateSheet(() => childSize = 0.75);
+                }
+
+                // سحب خفيف للأسفل → ينزل
+                if (velocity > 50) {
+                  setStateSheet(() => childSize = 0.25);
+                }
+              },
+              child: DraggableScrollableSheet(
+                initialChildSize: childSize,
+                minChildSize: 0.25,
+                maxChildSize: 0.75,
+                builder: (_, scrollController) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                      ),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 10),
+                          Container(
+                            width: 42,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: StationSheet(
+                              station: st,
+                              scrollController: scrollController,
+                              stationIdMap: _stationIdMap,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _sheetOpen = false;
     });
   }
+
+
+
+
+
+
 
 
   Future<void> _goToStation(Station st, {bool openSheet = false}) async {
@@ -901,17 +957,17 @@ class _HomeTabState extends State<HomeTab> {
 
     return outlines;
   }
-Future<void> _loadStations() async {
-  try {
-    final stations = await StationLoader.loadStations();
-    _stations
-      ..clear()
-      ..addAll(stations);
-    if (mounted) setState(() {});
-  } catch (e) {
-    debugPrint('❌ Failed to load stations JSON: $e');
+  Future<void> _loadStations() async {
+    try {
+      final stations = await StationLoader.loadStations();
+      _stations
+        ..clear()
+        ..addAll(stations);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('❌ Failed to load stations JSON: $e');
+    }
   }
-}
 
   String _shortLineName(String line) {
     if (line.contains('الأزرق') || line.toLowerCase().contains('blue')) return 'الأزرق';
@@ -959,5 +1015,3 @@ Future<void> _loadStations() async {
     return prev[m];
   }
 }
-
-
