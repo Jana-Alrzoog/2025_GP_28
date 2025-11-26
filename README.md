@@ -17,30 +17,30 @@ Masar supports the goals of **Saudi Vision 2030** by enabling smarter, safer, an
 
 ###  Frontend (Mobile App)
 - **Flutter (Dart)**
-- Google Maps integration
+- Google Maps integration  
 - Real-time UI updates via Firestore
 
 ###  AI & Prediction Models
 - **Python** (NumPy, Pandas, Scikit-Learn, XGBoost)
-- **XGBoost model** for 30-minute station crowd forecasting
+- Pre-trained **XGBoost model** for 30-minute crowd forecasting  
 - Digital Twin–based data simulation (`masar-sim`)
-- Early experiments with Random Forest (used only for comparison)
+- Training notebooks located in: `masar_forecasting/notebooks`
 
 ###  Backend & Services
-- **FastAPI** (Python) for REST APIs
-- Deployed on **Render**
-- Endpoints for trips, live station snapshots, alerts, and predictions
-- Firebase Admin SDK for secure access to Firestore
+- **FastAPI** for REST APIs  
+- Deployed on **Render**  
+- Endpoints for trips, live snapshots, alerts, and predictions  
+- Firebase Admin SDK for secure Firestore access  
 
 ###  Databases & Cloud
-- **Firestore NoSQL Database**
-- Firebase Authentication
-- Cloud Storage for assets/configs
+- **Firestore NoSQL Database**  
+- Firebase Authentication  
+- Cloud Storage for assets/configs  
 
 ###  Web Dashboard (Staff)
-- Flutter Web / basic JS depending on build
-- Real-time crowd monitoring
-- Integrated with XGBoost prediction outputs
+- Flutter Web (or basic JS depending on build)
+- Real-time crowd monitoring  
+- Integrated with XGBoost prediction outputs  
 
 ---
 
@@ -52,59 +52,74 @@ git clone https://github.com/your-username/your-repo-name.git
 cd your-repo-name
 ```
 
-### 2️⃣ Run the Flutter App
+---
 
+## 2️⃣ Run the Flutter App
 ```bash
 flutter pub get
 flutter run
 ```
 
 For web:
-
 ```bash
 flutter run -d chrome
 ```
 
-### 3️⃣ Run the FastAPI Backend
+---
 
+## 3️⃣ Run the FastAPI Backend
 ```bash
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-### 4️⃣ Run the Forecasting Module
+---
+
+## 4️⃣ Run the Forecasting Module
+
+Since the project uses **notebooks** instead of `.py` scripts:
 
 ```bash
 cd masar_forecasting
 pip install -r requirements.txt
-
-# Train model (if needed)
-python train_xgboost.py
-
-# Generate predictions
-python predict_xgboost.py
 ```
 
-### 5️⃣ Firebase Setup
+To **train or retrain** the XGBoost model:
+- Open the notebook:
+  ```
+  notebooks/XGBoost_Training_CrowdPrediction.ipynb
+  ```
+- Run all cells to generate a new model under:
+  ```
+  models/masar_xgb_30min_model.pkl
+  ```
 
-Ensure required Firebase configuration files are added:
-
-* `google-services.json` → Android
-* `GoogleService-Info.plist` → iOS
-* Service account JSON for backend (not committed to Git)
+To **generate predictions**:
+- Use the prediction cells inside the same notebook.
+- Export results to CSV as needed for the backend.
 
 ---
 
-##  Project Structure
+## 5️⃣ Firebase Setup
+Make sure the following files are added (not committed):
+
+- `google-services.json` → **Android**
+- `GoogleService-Info.plist` → **iOS**
+- Backend service account key → For FastAPI Firestore access
+
+---
+
+## Project Structure
 
 ```
 lib/                 # Flutter mobile app
 masar-sim/           # Digital Twin data simulation
-masar_forecasting/   # XGBoost forecasting model
+masar_forecasting/   # XGBoost forecasting notebooks + model
 web/                 # Staff dashboard
 assets/              # Images and static files
 android/ios/web/     # Flutter platform folders
 ```
 
 ---
+
 
