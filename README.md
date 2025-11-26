@@ -1,6 +1,3 @@
-
-
-````markdown
 <h1 align="center">Masar 🚆</h1>
 
 <p align="center">
@@ -9,51 +6,51 @@
 
 ---
 
-## 📌 Introduction
+## Introduction
 **Masar** is an AI-powered **Digital Twin system** designed to enhance passenger experience and optimize metro operations in the Riyadh Metro.  
 The system predicts station crowd levels 30 minutes ahead, provides real-time congestion visualizations, and offers an intelligent dashboard for metro staff to monitor and manage high-traffic situations.  
 Masar supports the goals of **Saudi Vision 2030** by enabling smarter, safer, and more efficient public transportation.
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
-### 🎨 Frontend (Mobile App)
+###  Frontend (Mobile App)
 - **Flutter (Dart)**
 - Google Maps integration
 - Real-time UI updates via Firestore
 
-### 🧠 AI & Prediction Models
+###  AI & Prediction Models
 - **Python** (NumPy, Pandas, Scikit-Learn, XGBoost)
 - **XGBoost model** for 30-minute station crowd forecasting
 - Digital Twin–based data simulation (`masar-sim`)
 - Early experiments with Random Forest (used only for comparison)
 
-### ☁️ Backend & Services
+###  Backend & Services
 - **FastAPI** (Python) for REST APIs
 - Deployed on **Render**
 - Endpoints for trips, live station snapshots, alerts, and predictions
 - Firebase Admin SDK for secure access to Firestore
 
-### 🗄️ Databases & Cloud
+###  Databases & Cloud
 - **Firestore NoSQL Database**
 - Firebase Authentication
 - Cloud Storage for assets/configs
 
-### 📊 Web Dashboard (Staff)
+###  Web Dashboard (Staff)
 - Flutter Web / basic JS depending on build
 - Real-time crowd monitoring
 - Integrated with XGBoost prediction outputs
 
 ---
 
-## 🚀 Launch Instructions
+## Launch Instructions
 
 ### 1️⃣ Clone the Repository
 ```bash
 git clone https://github.com/your-username/your-repo-name.git
 cd your-repo-name
-````
+```
 
 ### 2️⃣ Run the Flutter App
 
@@ -98,7 +95,7 @@ Ensure required Firebase configuration files are added:
 
 ---
 
-## 📚 Project Structure
+##  Project Structure
 
 ```
 lib/                 # Flutter mobile app
@@ -110,5 +107,4 @@ android/ios/web/     # Flutter platform folders
 ```
 
 ---
- .
-```
+
