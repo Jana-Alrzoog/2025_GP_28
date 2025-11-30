@@ -18,9 +18,7 @@ class ScheduleWidget extends StatelessWidget {
     required this.stationIdMap,
   });
 
-  // =========  (Destination) =========
-
-
+  // Destination
   static final Map<String, String?> _tripEndCache = {};
 
   
@@ -196,7 +194,7 @@ bool _isTerminalHere({
     }
   }
 
-  // "09:32AM"
+  
   String _formatArrivalTime(String time) {
     try {
       final parts = time.split(':');
@@ -305,7 +303,7 @@ bool _isTerminalHere({
                 timeStr = _formatFromTimestamp(ts);
               }
 
-              // 1) read stop dec
+              //read stop
               String? endCode =
               (data['end_station_code'] as String?)?.trim();
               if (endCode == null || endCode.isEmpty) {
@@ -343,7 +341,7 @@ bool _isTerminalHere({
                   final destName =
                       _resolveEndName(code) ?? 'وجهة غير معروفة';
 
-                // if the current station is the final dest 
+                // اذا كانت هذي المجطه هي اخر شي
                  if (_isTerminalHere(destCode: code, destName: destName)) {
                   return const SizedBox.shrink();
                 }
