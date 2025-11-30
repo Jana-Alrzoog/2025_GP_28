@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:lottie/lottie.dart';
 
-/*==========================
+/*
    Crowd Status Widget
    - current: from /snapshot/{sid}
    - future 30-min: from /predict_30min_live/{sid}
- ==========================*/
+*/
 
 const String kMasarApiBaseUrl = 'https://masar-sim.onrender.com';
 
@@ -25,8 +25,8 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
   bool _loading = true;
   String? _error;
 
-  String? _crowdLevel;  // Low / Medium / High / Extreme (الحالية)
-  String? _futureLevel; // Low / Medium / High / Extreme (التنبؤ)
+  String? _crowdLevel;  // الحالية
+  String? _futureLevel; // التنبؤ
 
   late final AnimationController _dotCtrl;
   late final Animation<double> _dotScale;
@@ -84,7 +84,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
     });
 
     try {
-      // 1) /snapshot/{sid}
+      //  /snapshot/{sid}
       final snapUrl =
           Uri.parse('$kMasarApiBaseUrl/snapshot/$normalizedSid');
       final snapRes = await http.get(snapUrl);
@@ -101,7 +101,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
       final currentLevel =
           (snapData['crowd_level'] as String?) ?? 'Medium';
 
-      // 2) /predict_30min_live/{sid}
+      ///predict_30min_live/{sid}
       String? futureLevel;
 
       try {
@@ -112,7 +112,7 @@ class CrowdStatusWidgetState extends State<CrowdStatusWidget>
         if (predRes.statusCode == 200) {
           final predData =
               jsonDecode(predRes.body) as Map<String, dynamic>;
-          // server return crowd_level_30min
+          // السيرفر يرجع الازدحام المتنبأ بعد 30د
           futureLevel =
               (predData['crowd_level_30min'] as String?) ?? currentLevel;
         } else {
