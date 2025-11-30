@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
-import 'package:firebase_auth/firebase_auth.dart';           // 👈 Firebase Auth
-import 'package:cloud_firestore/cloud_firestore.dart';       // 👈 Firestore
+import 'package:firebase_auth/firebase_auth.dart';          
+import 'package:cloud_firestore/cloud_firestore.dart';       
 import '../screens/signin_screen.dart';
 import '../theme/theme.dart';
 import '../widgets/custom_scaffold.dart';
@@ -23,17 +23,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _confirmController  = TextEditingController();
 
-  // 🔎 فوكس لحقل الباسورد لعرض/إخفاء قواعد الباسورد فقط عند الضغط عليه
+
   final FocusNode _pwFocusNode = FocusNode();
   bool _showPwRules = false;
 
   bool _isLoading = false;
 
-  // ✅ حالات تحقق شروط كلمة المرور (تتحدث لحظيًا)
+ 
   bool _pwHasMinLen = false;
   bool _pwHasDigit  = false;
   bool _pwHasUpper  = false;
-  bool _pwHasLower  = false; // 👈 جديد: حرف صغير
+  bool _pwHasLower  = false; 
   bool _pwHasSpecial= false;
 
   @override
@@ -41,7 +41,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.initState();
     _passwordController.addListener(_updatePasswordRules);
 
-    // تحديث حالة إظهار القواعد بناءً على تركيز الحقل
+
     _pwFocusNode.addListener(() {
       setState(() {
         _showPwRules = _pwFocusNode.hasFocus;
@@ -53,9 +53,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final p = _passwordController.text;
     setState(() {
       _pwHasMinLen  = p.length >= 12 ;
-      _pwHasDigit   = RegExp(r'[0-9\u0660-\u0669]').hasMatch(p); // يدعم 0-9 والأرقام العربية
+      _pwHasDigit   = RegExp(r'[0-9\u0660-\u0669]').hasMatch(p); 
       _pwHasUpper   = RegExp(r'[A-Z]').hasMatch(p);
-      _pwHasLower   = RegExp(r'[a-z]').hasMatch(p);              // 👈 جديد
+      _pwHasLower   = RegExp(r'[a-z]').hasMatch(p);             
       _pwHasSpecial = RegExp(r'[!@#\$&*~]').hasMatch(p);
     });
   }
@@ -70,19 +70,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  // ✅ دالة فحص الباسورد الموحّدة (تستخدمها الـ validator)
+
   String? _passwordValidator(String? value) {
     final password = value ?? '';
     if (password.isEmpty) return 'الرجاء إدخال رمز المرور';
     if (!_pwHasMinLen)   return 'كلمة المرور يجب أن تكون 12 رموز على الأقل';
     if (!_pwHasDigit)    return 'يجب أن تحتوي على رقم واحد على الأقل';
     if (!_pwHasUpper)    return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
-    if (!_pwHasLower)    return 'يجب أن تحتوي على حرف صغير واحد على الأقل'; // 👈 جديد
+    if (!_pwHasLower)    return 'يجب أن تحتوي على حرف صغير واحد على الأقل'; 
     if (!_pwHasSpecial)  return 'يجب أن تحتوي على رمز خاص (! @ # \$ & * ~)';
     return null;
   }
 
-  // ✅ فحص الاسم: حروف عربي/إنجليزي + أرقام (تشمل الأرقام العربية) + مسافات فقط
+  //  فحص الاسم:  تسمح بس بحروف عربي/إنجليزي + أرقام + مسافات 
   final RegExp _nameAllowed = RegExp(r'^[a-zA-Z\u0621-\u064A0-9\u0660-\u0669\s]+$');
 
   Future<void> _register() async {
@@ -90,21 +90,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // 1) إنشاء الحساب في Firebase Auth
+      //  إنشاء الحساب في Firebase Auth
       final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
       final uid = cred.user!.uid;
 
-      // 2) تخزين البيانات في Firestore داخل Passenger/{uid}
+      // passenger تخزين البيانات في  
       await FirebaseFirestore.instance.collection('Passenger').doc(uid).set({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 3) الانتقال بعد النجاح
+      //  الانتقال بعد النجاح
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -205,9 +205,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         obscureText: true,
                         obscuringCharacter: '*',
                         autofillHints: const [AutofillHints.newPassword],
-                        validator: _passwordValidator, // ✅ يستخدم نفس الشروط
-                        onChanged: (_) => _updatePasswordRules(), // للتأكيد
-                        onTap: () => setState(() => _showPwRules = true), // إظهار القواعد عند الضغط
+                        validator: _passwordValidator, 
+                        onChanged: (_) => _updatePasswordRules(), 
+                        onTap: () => setState(() => _showPwRules = true), 
                         decoration: _decoration(
                           label: 'رمز المـرور',
                           hint: 'ادخـل رمز المـرور',
@@ -215,21 +215,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                       ),
 
-                      // ✅ قائمة شروط كلمة المرور التفاعلية — تظهر فقط عند الضغط/التركيز على الحقل
+                     
                       if (_showPwRules) ...[
                         const SizedBox(height: 12.0),
                         _PasswordRules(
                           hasMinLen: _pwHasMinLen,
                           hasDigit: _pwHasDigit,
                           hasUpper: _pwHasUpper,
-                          hasLower: _pwHasLower,    // 👈 جديد
+                          hasLower: _pwHasLower,   
                           hasSpecial: _pwHasSpecial,
                         ),
                       ],
 
                       const SizedBox(height: 20.0),
 
-                      // تأكيد كلمة المرور (أزرق)
                       TextFormField(
                         autovalidateMode: AutovalidateMode.onUserInteraction,
                         controller: _confirmController,
@@ -251,7 +250,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       const SizedBox(height: 25.0),
 
-                      // زر التسجيل
+                      
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -270,7 +269,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       const SizedBox(height: 30.0),
 
-                      // التنقل إلى تسجيل الدخول
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -343,12 +341,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 }
 
-/// ✅ ويدجت تعرض شروط كلمة المرور مع أيقونة حيّة
+
 class _PasswordRules extends StatelessWidget {
   final bool hasMinLen;
   final bool hasDigit;
   final bool hasUpper;
-  final bool hasLower;  // 👈 جديد
+  final bool hasLower;  
   final bool hasSpecial;
 
   const _PasswordRules({
@@ -369,14 +367,14 @@ class _PasswordRules extends StatelessWidget {
         _ruleRow('12 رموز فأكثر', hasMinLen, style: textStyle),
         _ruleRow('رقم واحد على الأقل', hasDigit, style: textStyle),
         _ruleRow('حرف كبير واحد على الأقل (A-Z)', hasUpper, style: textStyle),
-        _ruleRow('حرف صغير واحد على الأقل (a-z)', hasLower, style: textStyle), // 👈 جديد
+        _ruleRow('حرف صغير واحد على الأقل (a-z)', hasLower, style: textStyle), 
         _ruleRow('رمز خاص واحد على الأقل (! @ # \$ & * ~)', hasSpecial, style: textStyle),
       ],
     );
   }
 
   Widget _ruleRow(String text, bool ok, {TextStyle? style}) {
-    final color = ok ? const Color(0xFF2E7D32) : Colors.black38; // أخضر إذا تحقق
+    final color = ok ? const Color(0xFF2E7D32) : Colors.black38; 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
