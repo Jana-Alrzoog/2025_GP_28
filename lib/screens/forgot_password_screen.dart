@@ -34,15 +34,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       final email = _emailController.text.trim();
 
-      // 🔥 الحل: نستخدم createUserWithEmailAndPassword للتحقق
+
       try {
-        // نحاول ننشئ حساب جديد بنفس الإيميل
+        // نحاول نسوي حساب جديد بنفس الإيميل
         await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
-          password: 'TemporaryPassword123!', // باسورد مؤقت
+          password: 'TemporaryPassword123!', 
         );
 
-        // إذا وصلنا هنا، معناه الإيميل مو مسجل - نحذف الحساب المؤقت
+        //لما يكون الايميل مو مسجل
         await FirebaseAuth.instance.currentUser!.delete();
 
         setState(() => _customError = 'خطأ في البريد الإلكتروني');
@@ -51,7 +51,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          // الإيميل مسجل - نكمل عملية إرسال رابط الاستعادة
+          // لما يكون الايميل مسجل
           await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
           if (!mounted) return;
@@ -61,7 +61,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Navigator.pop(context);
           return;
         }
-        throw e; // إذا كان خطأ ثاني نرميه
+        throw e; 
       }
 
     } on FirebaseAuthException catch (e) {
