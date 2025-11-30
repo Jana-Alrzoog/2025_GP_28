@@ -3,21 +3,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class LocationService {
   static const _prefKey = 'use_location';
-  static const _askedKey = 'asked_location'; // هل سبق وسألناه؟
+  static const _askedKey = 'asked_location'; 
 
-  /// قراءة إعداد استخدام الموقع من الجهاز
+
   static Future<bool> getUseLocation() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_prefKey) ?? false;
   }
 
-  /// حفظ إعداد استخدام الموقع في الجهاز
+
   static Future<void> setUseLocation(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKey, value);
   }
 
-  /// هل قد سألناه قبل؟
+
   static Future<bool> getHasAsked() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_askedKey) ?? false;
@@ -28,7 +28,7 @@ class LocationService {
     await prefs.setBool(_askedKey, value);
   }
 
-  /// طلب صلاحية الموقع من النظام
+  // طلب صلاحية الموقع من النظام
   static Future<LocationPermission> requestPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
 
@@ -39,7 +39,7 @@ class LocationService {
     return permission;
   }
 
-  /// جلب موقع المستخدم الحالي بالطريقة الجديدة (بدون تحذير)
+
   static Future<Position?> getCurrentPosition() async {
     final servicesEnabled = await Geolocator.isLocationServiceEnabled();
     if (!servicesEnabled) {
