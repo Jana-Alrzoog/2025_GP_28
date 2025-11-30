@@ -4,7 +4,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; // 👈 ضيفي هذا السطر
+import 'package:flutter/rendering.dart'; 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '/services/location_service.dart';
@@ -14,7 +14,7 @@ import 'station_sheet.dart';
 import '../../models/station.dart';
 import '/services/station_loader.dart';
 
-// Base URL for Masar snapshot API (FastAPI on Render)
+// Base URL for Masar snapshot API
 const String kMasarApiBaseUrl = "https://masar-sim.onrender.com";
 
 class HomeTab extends StatefulWidget {
@@ -31,8 +31,8 @@ class _HomeTabState extends State<HomeTab> {
   final Set<Polygon> _polygons = {};
   final Set<Marker> _markers = {};
 
-  LatLng? _userLatLng;        // موقع المستخدم
-  bool _useLocation = false;  // إعداد استخدام الموقع
+  LatLng? _userLatLng;        
+  bool _useLocation = false;  
 
   final Color _maskFill = Colors.black.withOpacity(0.75);
   final Color _borderColor = const Color(0xFFD12027);
@@ -61,7 +61,7 @@ class _HomeTabState extends State<HomeTab> {
   Station? _selectedStation;
   bool _sheetOpen = false;
 
-  // خريطة ربط station_id بالأسماء
+
   Map<String, String> _stationIdMap = {};
 
   static const Color _blueHex = Color(0xFF00ADE5);
@@ -177,7 +177,7 @@ class _HomeTabState extends State<HomeTab> {
       final data = json.decode(raw) as Map<String, dynamic>;
       _stationIdMap = data.map((k, v) => MapEntry(k, v.toString()));
     } catch (e) {
-      debugPrint('❌ Failed to load station_id_map.json: $e');
+      debugPrint(' Failed to load station_id_map.json: $e');
     }
   }
 
@@ -325,7 +325,7 @@ class _HomeTabState extends State<HomeTab> {
           ),
           Positioned(
             right: 16,
-            bottom: 100, // فوق البوتوم نافيقيشن
+            bottom: 100, 
             child: FloatingActionButton(
               heroTag: "locBtn",
               backgroundColor: Colors.white,
@@ -476,7 +476,7 @@ class _HomeTabState extends State<HomeTab> {
       isDismissible: true,
       enableDrag: true,
       builder: (ctx) {
-        double childSize = 0.32; // الوضع الأساسي
+        double childSize = 0.32; 
 
         return StatefulBuilder(
           builder: (context, setStateSheet) {
@@ -484,12 +484,12 @@ class _HomeTabState extends State<HomeTab> {
               onVerticalDragEnd: (details) {
                 final velocity = details.primaryVelocity ?? 0;
 
-                // سحب خفيف للأعلى → يرتفع
+              
                 if (velocity < -50) {
                   setStateSheet(() => childSize = 0.75);
                 }
 
-                // سحب خفيف للأسفل → ينزل
+
                 if (velocity > 50) {
                   setStateSheet(() => childSize = 0.25);
                 }
@@ -540,12 +540,6 @@ class _HomeTabState extends State<HomeTab> {
       _sheetOpen = false;
     });
   }
-
-
-
-
-
-
 
 
   Future<void> _goToStation(Station st, {bool openSheet = false}) async {
@@ -761,7 +755,7 @@ class _HomeTabState extends State<HomeTab> {
 
       setState(() {});
     } catch (e) {
-      debugPrint('❌ Failed to load boundary GeoJSON: $e');
+      debugPrint(' Failed to load boundary GeoJSON: $e');
     }
   }
 
@@ -965,7 +959,7 @@ class _HomeTabState extends State<HomeTab> {
         ..addAll(stations);
       if (mounted) setState(() {});
     } catch (e) {
-      debugPrint('❌ Failed to load stations JSON: $e');
+      debugPrint('Failed to load stations JSON: $e');
     }
   }
 
