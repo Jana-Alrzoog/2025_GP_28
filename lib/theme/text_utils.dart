@@ -1,4 +1,3 @@
-// lib/theme/text_utils.dart
 String norm(String s) {
   var t = s.trim().toLowerCase();
   const diacritics = [
