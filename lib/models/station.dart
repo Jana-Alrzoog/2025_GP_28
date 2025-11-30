@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-/*==========================
-   Station Model
- ==========================*/
-
+/*Station Model*/
 class Station {
   final String name;
   final String? altName;
