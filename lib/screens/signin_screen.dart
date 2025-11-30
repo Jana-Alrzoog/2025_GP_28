@@ -249,14 +249,14 @@ class _SignInScreenState extends State<SignInScreen> {
                       ),
                       const SizedBox(height: 15.0),
 
-                      // ✅ رسالة الخطأ - الأيقونة بعد النص وفي المنتصف
+                      //  رسالة الخطأ 
                       if (_errorMessage != null)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           margin: const EdgeInsets.only(bottom: 10),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center, // ✅ النص في الوسط
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 _errorMessage!,
@@ -266,7 +266,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(width: 6), // ✅ مسافة بين النص والأيقونة
+                              const SizedBox(width: 6), 
                               const Icon(
                                 Icons.error_outline,
                                 color: Color(0xFFBA1A1A),
@@ -276,7 +276,6 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ),
 
-                      // نسيت كلمة المرور → يفتح شاشة جديدة
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -323,8 +322,6 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 25.0),
-
-                      // ما عندك حساب؟
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
