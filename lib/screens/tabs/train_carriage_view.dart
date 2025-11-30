@@ -1,5 +1,3 @@
-// lib/train_carriage_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -117,9 +115,8 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
     return 'العامة';
   }
 
-  // =========================
+
   //   Firestore 
-  // =========================
   Future<void> _fetchCarriageData() async {
     try {
       const monthKey = '2025-11_12';
@@ -132,7 +129,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
           .collection('trips')
           .doc(widget.tripId);
 
-      // 1) stop 
+      //  stop 
       final currentStopsSnap = await tripRef
           .collection('stops')
           .where('station_id', isEqualTo: widget.stationId)
@@ -168,7 +165,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         }
       }
 
-      // 2) all stops for this trip
+      // all stops for the trip
       final allStopsSnap = await tripRef.collection('stops').get();
 
       if (allStopsSnap.docs.isEmpty) {
@@ -187,6 +184,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
 
       for (final d in allStopsSnap.docs) {
         final data = d.data();
+        
         // seq
         int seq;
         try {
@@ -235,7 +233,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         if (s < firstSeq) firstSeq = s;
       }
 
-      // 3) first station in the line
+      // first station in the line
       if (currentSeq <= firstSeq) {
         if (!mounted) return;
         setState(() {
@@ -248,20 +246,20 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         return;
       }
 
-      // 4) current time (UTC)
+      // current time
       final nowUtc = DateTime.now().toUtc();
 
-      //  (departure <= now)
+      //  departure <= now
       Map<String, dynamic>? lastDeparted;
       for (final m in stopsMeta) {
         final seq = m['seq'] as int;
         final depTs = m['depTs'] as Timestamp?;
 
-        if (seq >= currentSeq) continue; // لازم تكون قبل محطتك
+        if (seq >= currentSeq) continue; 
         if (depTs == null) continue;
 
         final depTime = depTs.toDate().toUtc();
-        if (depTime.isAfter(nowUtc)) continue; // لسه ما غادرها
+        if (depTime.isAfter(nowUtc)) continue; // هنا لما يكون لسه ما مشى منها
 
         if (lastDeparted == null) {
           lastDeparted = m;
@@ -272,7 +270,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
         }
       }
 
-      // 5) the trip did not start yet
+      //  لما الرحله ما بعد بدت
       if (lastDeparted == null) {
         if (!mounted) return;
         setState(() {
@@ -287,7 +285,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
 
       final lastStopRef = lastDeparted['ref'] as DocumentReference;
 
-      // 6) carriages for last dest
+      // carriages for last destenation
       final carSnap = await lastStopRef
           .collection('carriages')
           .orderBy('carriage_no')
@@ -686,7 +684,6 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // القطار نفسه
         Column(
           children: List.generate(_carriages.length, (index) {
             final carriage = _carriages[index];
@@ -863,7 +860,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
 
         const SizedBox(width: 16),
 
-        // السهم المتقطع
+
         Column(
           children: List.generate(_carriages.length, (index) {
             return Column(
