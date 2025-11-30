@@ -56,22 +56,19 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
 
-          // ===== الأزرار السفلية =====
+       
           Flexible(
             flex: 1,
             child: Align(
               alignment: Alignment.bottomRight,
               child: Stack(
                 children: [
-                  // 🔹 الخلفية البيضاء الممتدة تحت الأسود
                   Positioned.fill(
                     child: Container(color: Colors.white),
                   ),
-
-                  // 🔹 الأزرار
+     
                   Row(
                     children: [
-                      // ✅ الزر الأبيض مع إعادة الانحناء لليسار
                       Expanded(
                         child: ClipRRect(
                           borderRadius: const BorderRadius.only(
@@ -87,7 +84,6 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ),
 
-                      // 🔹 الزر الأسود بدون تغيير
                       const Expanded(
                         child: WelcomeButton(
                           buttonText: 'إنشـاء حسـاب',
