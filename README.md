@@ -37,10 +37,10 @@ Masar supports the goals of **Saudi Vision 2030** by enabling smarter, safer, an
 - Firebase Authentication  
 - Cloud Storage for assets/configs  
 
-###  Web Dashboard (Staff)
-- Flutter Web (or basic JS depending on build)
-- Real-time crowd monitoring  
-- Integrated with XGBoost prediction outputs  
+### Web Dashboard (Staff)
+- Built using HTML, CSS, and JavaScript
+- Supports real-time crowd monitoring for metro stations
+- Integrates XGBoost-based crowd prediction outputs into the live dashboard
 
 ---
 
