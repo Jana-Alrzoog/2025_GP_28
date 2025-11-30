@@ -6,7 +6,6 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // لازم يكون داخل buildscript/dependencies
         classpath("com.google.gms:google-services:4.4.2")
     }
 }
@@ -18,7 +17,6 @@ allprojects {
     }
 }
 
-// 👇 اترك بقية أكوادك كما هي
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
