@@ -5,7 +5,7 @@ import '../../screens/signin_screen.dart';
 import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 
-// تم إضافة دالة التوست هنا
+
 void showTopToast(BuildContext context, String message) {
   final overlay = Overlay.of(context);
   final overlayEntry = OverlayEntry(
@@ -86,7 +86,7 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  // 🔥 تم تعديل دالة تسجيل الخروج بالكامل
+  
   Future<void> _confirmSignOut(BuildContext context) async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -361,7 +361,6 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 }
 
-// ===== باقي الصفحة كما هي بدون تغيير =====
 
 class _ToggleTile extends StatefulWidget {
   final String title;
