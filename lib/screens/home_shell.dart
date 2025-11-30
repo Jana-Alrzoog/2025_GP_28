@@ -23,25 +23,20 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // ألوان التبويبات عند التفعيل
+   
     const tabColors = [
-      Color.fromRGBO(209, 32, 39, 1.0), // الرئيسية (برتقالي)
-      Color(0xFF43B649), // المساعد (أخضر)
-      Color(0xFF984C9D), // الملف (بنفسجي)
+      Color.fromRGBO(209, 32, 39, 1.0), 
+      Color(0xFF43B649), 
+      Color(0xFF984C9D), 
     ];
     const inactive = Color.fromRGBO(59, 59, 59, 1);
 
     return Scaffold(
-      // نحتاجه علشان الموجة تدخل فوق الجسم، بس بنحكم تموضع البار يدويًا
       extendBody: true,
       backgroundColor: const Color(0xFFF5F5F5),
 
-
-
-      // نستخدم Stack حتى نثبت البار بأسفل الشاشة بدون أي فراغ
       body: Stack(
         children: [
-          // المحتوى
           Positioned.fill(child: _pages[_index]),
           Positioned(
             left: 0,
@@ -50,18 +45,16 @@ class _HomeShellState extends State<HomeShell> {
             height: 20,
             child: Container(color: Colors.white),
           ),
-          // البار السفلي — مثبت عند 0 بالضبط
           Positioned(
             left: 0,
             right: 0,
             bottom: -10,
             child: MediaQuery.removePadding(
               context: context,
-              removeBottom: true, // ⛔️ ألغِ أي SafeArea سفلية
+              removeBottom: true, 
               child: SizedBox(
                 height: 70,
                 child: FluidNavBar(
-                  // لا تكتب const هنا لأن الألوان تعتمد على _index
                   icons: [
                     FluidNavBarIcon(
                       icon: Icons.home,
