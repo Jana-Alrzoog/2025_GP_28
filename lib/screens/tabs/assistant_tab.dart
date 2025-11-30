@@ -54,7 +54,6 @@ class _AssistantTabState extends State<AssistantTab> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 🗨️ قائمة الرسائل
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, _inputBarHeight + 16),
           child: ListView.builder(
@@ -64,11 +63,10 @@ class _AssistantTabState extends State<AssistantTab> {
           ),
         ),
 
-        // 💬 شريط الكتابة المرتفع
         Positioned(
           left: 0,
           right: 0,
-          bottom: 80, // ✅ رفع الشريط فعليًا للأعلى
+          bottom: 80,
           child: SafeArea(
             top: false,
             child: Padding(
