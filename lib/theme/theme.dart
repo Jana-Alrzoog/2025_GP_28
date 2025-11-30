@@ -50,18 +50,14 @@ ThemeData _buildTheme({
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    // الخط الأساسي يبقى عربيك/Handicrafts مثل ما هو
+    // الخط حقنا 
     fontFamily: 'Handicrafts',
-  );
-
-  // نضيف AppLatin كـ fallback لكل أنماط النص — بدون ما نغيّر الخط الأساسي
+  );  
   final textWithLatin = _withLatinFallback(base.textTheme);
   final primaryTextWithLatin = _withLatinFallback(base.primaryTextTheme);
-
   return base.copyWith(
     textTheme: textWithLatin,
     primaryTextTheme: primaryTextWithLatin,
-    // لو حاب تتأكد في AppBar/Buttons وغيرهم:
     appBarTheme: base.appBarTheme.copyWith(
       titleTextStyle: (base.appBarTheme.titleTextStyle ?? const TextStyle())
           .copyWith(fontFamilyFallback: const ['AppLatin']),
@@ -75,7 +71,6 @@ ThemeData _buildTheme({
   );
 }
 
-/// يحقن AppLatin كـ fallback في جميع TextStyles داخل TextTheme.
 TextTheme _withLatinFallback(TextTheme t) {
   TextStyle addFallback(TextStyle? s) =>
       (s ?? const TextStyle()).copyWith(fontFamilyFallback: const ['AppLatin', 'Roboto']);
