@@ -5,6 +5,9 @@ import 'tabs/home_tab.dart';
 import 'tabs/assistant_tab.dart';
 import 'tabs/profile_tab.dart';
 
+// ✅ add this
+import '/services/notifications_onboarding.dart';
+
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -22,19 +25,27 @@ class _HomeShellState extends State<HomeShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+
+    // ✅ run once after first frame (context ready)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationsOnboarding.maybeRun(context);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-   
     const tabColors = [
-      Color.fromRGBO(209, 32, 39, 1.0), 
-      Color(0xFF43B649), 
-      Color(0xFF984C9D), 
+      Color.fromRGBO(209, 32, 39, 1.0),
+      Color(0xFF43B649),
+      Color(0xFF984C9D),
     ];
     const inactive = Color.fromRGBO(59, 59, 59, 1);
 
     return Scaffold(
       extendBody: true,
       backgroundColor: const Color(0xFFF5F5F5),
-
       body: Stack(
         children: [
           Positioned.fill(child: _pages[_index]),
@@ -51,7 +62,7 @@ class _HomeShellState extends State<HomeShell> {
             bottom: -10,
             child: MediaQuery.removePadding(
               context: context,
-              removeBottom: true, 
+              removeBottom: true,
               child: SizedBox(
                 height: 70,
                 child: FluidNavBar(

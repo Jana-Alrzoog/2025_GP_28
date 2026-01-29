@@ -4,7 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/signin_screen.dart';
 import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
+// ✅ صفحة اختيار المحطات (ملف جديد داخل tabs)
+import 'select_stations_screen.dart';
 
 void showTopToast(BuildContext context, String message) {
   final overlay = Overlay.of(context);
@@ -52,6 +55,35 @@ void showTopToast(BuildContext context, String message) {
   Future.delayed(const Duration(seconds: 3), () => overlayEntry.remove());
 }
 
+void showBottomBlackSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context)
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.black,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+}
+
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
@@ -62,6 +94,9 @@ class ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<ProfileTab> {
   String fullName = "الاسم غير متاح";
   String email = "البريد غير متاح";
+
+  // مهم: يبدأ false عشان ما يظهر "تحديد المحطات" شغال بدون قراءة
+  bool _notificationsOn = false;
 
   @override
   void initState() {
@@ -86,7 +121,6 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  
   Future<void> _confirmSignOut(BuildContext context) async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -102,7 +136,7 @@ class _ProfileTabState extends State<ProfileTab> {
           height: 200,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               const Column(
                 children: [
@@ -123,7 +157,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 ],
               ),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -141,8 +174,8 @@ class _ProfileTabState extends State<ProfileTab> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF964C9B),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 22, vertical: 10),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -150,8 +183,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     onPressed: () => Navigator.of(context).pop(true),
                     child: const Text(
                       "تسجيل خروج",
-                      style:
-                      TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -167,7 +199,6 @@ class _ProfileTabState extends State<ProfileTab> {
 
       if (mounted) {
         showTopToast(context, "تم تسجيل الخروج");
-
         await Future.delayed(const Duration(milliseconds: 1500));
         Navigator.pushReplacement(
           context,
@@ -194,7 +225,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   color: const Color(0xFFDADADA),
                 ),
               ),
-
               Positioned.fill(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -216,7 +246,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   ],
                 ),
               ),
-
               Positioned(
                 left: 36,
                 right: 36,
@@ -290,7 +319,6 @@ class _ProfileTabState extends State<ProfileTab> {
                               ),
                             ],
                           ),
-
                           Positioned(
                             bottom: 0,
                             left: 0,
@@ -323,9 +351,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ],
           ),
-
           const SizedBox(height: 140),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 36),
             child: GridView.count(
@@ -336,8 +362,42 @@ class _ProfileTabState extends State<ProfileTab> {
               physics: const NeverScrollableScrollPhysics(),
               childAspectRatio: 1.5,
               children: [
-                _ToggleTile(title: 'الإشعارات'),
+                // ✅ الإشعارات
+                _NotificationsToggleTile(
+                  onSyncValue: (v) {
+                    if (mounted) setState(() => _notificationsOn = v);
+                  },
+                ),
+
                 const _LocationToggleTile(),
+
+                // ✅ تحديد المحطات
+                _NavTile(
+                  title: 'تحديد المحطات',
+                  icon: Icons.location_on_outlined,
+                  enabled: _notificationsOn,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SelectStationsScreen(),
+                      ),
+                    );
+                  },
+                  onDisabledTap: () {
+                    showBottomBlackSnack(
+                      context,
+                      'فعّلي الإشعارات أولاً ثم حددي المحطات.',
+                    );
+                  },
+                ),
+
+                _Tile(
+                  title: 'تتبع البلاغات',
+                  icon: Icons.alt_route,
+                  onTap: () {},
+                ),
+
                 _Tile(
                   title: 'تسجيل خروج',
                   icon: Icons.logout,
@@ -345,11 +405,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   color: Colors.white,
                   titleColor: const Color(0xFFD02020),
                   iconColor: const Color(0xFFD02020),
-                ),
-                _Tile(
-                  title: 'تتبع البلاغات',
-                  icon: Icons.alt_route,
-                  onTap: () {},
                 ),
               ],
             ),
@@ -361,49 +416,150 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 }
 
+/// ✅ الإشعارات
+class _NotificationsToggleTile extends StatefulWidget {
+  final ValueChanged<bool>? onSyncValue;
 
-class _ToggleTile extends StatefulWidget {
-  final String title;
-  const _ToggleTile({required this.title, super.key});
+  const _NotificationsToggleTile({this.onSyncValue, super.key});
 
   @override
-  State<_ToggleTile> createState() => _ToggleTileState();
+  State<_NotificationsToggleTile> createState() =>
+      _NotificationsToggleTileState();
 }
 
-class _ToggleTileState extends State<_ToggleTile> {
-  bool isOn = true;
+class _NotificationsToggleTileState extends State<_NotificationsToggleTile> {
+  bool isOn = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromFirestore();
+  }
+
+  Future<void> _syncFromFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('Passenger')
+          .doc(user.uid)
+          .get();
+
+      final enabled = doc.data()?['notificationsEnabled'] == true;
+
+      if (!mounted) return;
+
+      if (isOn != enabled) {
+        setState(() => isOn = enabled);
+        widget.onSyncValue?.call(enabled);
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> _requestPermission() async {
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    return settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+  }
+
+  Future<void> _saveToFirestore({required bool enabled, String? token}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ref = FirebaseFirestore.instance.collection('Passenger').doc(user.uid);
+
+    await ref.set({
+      'notificationsEnabled': enabled,
+      'notificationsUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    if (token != null && token.isNotEmpty) {
+      await ref.set({
+        'fcmTokens': {token: true},
+      }, SetOptions(merge: true));
+    }
+  }
+
+  Future<void> _onChanged(bool v) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    try {
+      if (!v) {
+        await _saveToFirestore(enabled: false);
+        if (!mounted) return;
+        setState(() => isOn = false);
+        widget.onSyncValue?.call(false);
+        return;
+      }
+
+      final granted = await _requestPermission();
+
+      if (!granted) {
+        await _saveToFirestore(enabled: false);
+        if (!mounted) return;
+        setState(() => isOn = false);
+        widget.onSyncValue?.call(false);
+
+        showBottomBlackSnack(
+          context,
+          'لا يمكن تفعيل الإشعارات بدون إذن. فعّليها من إعدادات الجهاز.',
+        );
+        return;
+      }
+
+      final token = await FirebaseMessaging.instance.getToken();
+      await _saveToFirestore(enabled: true, token: token);
+
+      if (!mounted) return;
+      setState(() => isOn = true);
+      widget.onSyncValue?.call(true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Switch(
-              value: isOn,
-              onChanged: (v) => setState(() => isOn = v),
-              activeColor: const Color(0xFF964C9B),
-              trackOutlineColor: MaterialStateProperty.resolveWith<Color?>(
-                    (Set<MaterialState> states) {
-                  return const Color(0xFF964C9B);
-                },
-              ),
+    return Opacity(
+      opacity: _busy ? 0.85 : 1.0,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: IgnorePointer(
+          ignoring: _busy,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Switch(
+                  value: isOn,
+                  onChanged: _onChanged,
+                  activeColor: const Color(0xFF964C9B),
+                  trackOutlineColor: MaterialStateProperty.resolveWith<Color?>(
+                    (Set<MaterialState> states) => const Color(0xFF964C9B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'الإشعارات',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              widget.title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.black,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -445,18 +601,17 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
     }
 
     final perm = await LocationService.requestPermission();
-    final granted = perm == LocationPermission.always ||
-        perm == LocationPermission.whileInUse;
+    final granted =
+        perm == LocationPermission.always || perm == LocationPermission.whileInUse;
 
     if (!granted) {
       await LocationService.setUseLocation(false);
       if (!mounted) return;
       setState(() => _isOn = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('لم يتم منح صلاحية الموقع من النظام. فعّلها من إعدادات الجهاز.'),
-        ),
+      showBottomBlackSnack(
+        context,
+        'لم يتم منح صلاحية الموقع من النظام. فعّليها من إعدادات الجهاز.',
       );
       return;
     }
@@ -475,7 +630,6 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      elevation: 0,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
         child: Column(
@@ -486,9 +640,7 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
               onChanged: _onChanged,
               activeColor: const Color(0xFF964C9B),
               trackOutlineColor: MaterialStateProperty.resolveWith<Color?>(
-                    (Set<MaterialState> states) {
-                  return const Color(0xFF964C9B);
-                },
+                (Set<MaterialState> states) => const Color(0xFF964C9B),
               ),
             ),
             const SizedBox(height: 8),
@@ -527,7 +679,6 @@ class _Tile extends StatelessWidget {
     return Material(
       color: color ?? Colors.white,
       borderRadius: BorderRadius.circular(16),
-      elevation: 0,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
@@ -554,13 +705,68 @@ class _Tile extends StatelessWidget {
   }
 }
 
+class _NavTile extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+  final VoidCallback? onDisabledTap;
+
+  const _NavTile({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+    this.enabled = true,
+    this.onDisabledTap,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.42,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: enabled ? onTap : (onDisabledTap ?? () {}),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 26, color: Colors.black54),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomCurveClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
     path.lineTo(0, size.height - 40);
     path.quadraticBezierTo(
-        size.width / 2, size.height, size.width, size.height - 40);
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 40,
+    );
     path.lineTo(size.width, 0);
     path.close();
     return path;

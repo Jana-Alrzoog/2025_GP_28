@@ -1,10 +1,9 @@
-
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '/services/location_service.dart';
@@ -31,8 +30,8 @@ class _HomeTabState extends State<HomeTab> {
   final Set<Polygon> _polygons = {};
   final Set<Marker> _markers = {};
 
-  LatLng? _userLatLng;        
-  bool _useLocation = false;  
+  LatLng? _userLatLng;
+  bool _useLocation = false;
 
   final Color _maskFill = Colors.black.withOpacity(0.75);
   final Color _borderColor = const Color(0xFFD12027);
@@ -61,7 +60,6 @@ class _HomeTabState extends State<HomeTab> {
   Station? _selectedStation;
   bool _sheetOpen = false;
 
-
   Map<String, String> _stationIdMap = {};
 
   static const Color _blueHex = Color(0xFF00ADE5);
@@ -75,9 +73,16 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadStationIdMap();
-
-
   }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  // -------------------- LOCATION (unchanged) --------------------
 
   Future<void> _handleLocationOnFirstOpen() async {
     final useLoc = await LocationService.getUseLocation();
@@ -162,14 +167,7 @@ class _HomeTabState extends State<HomeTab> {
     return result ?? false;
   }
 
-  @override
-  void dispose() {
-
-
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
-    super.dispose();
-  }
+  // -------------------- STATION ID MAP --------------------
 
   Future<void> _loadStationIdMap() async {
     try {
@@ -177,9 +175,11 @@ class _HomeTabState extends State<HomeTab> {
       final data = json.decode(raw) as Map<String, dynamic>;
       _stationIdMap = data.map((k, v) => MapEntry(k, v.toString()));
     } catch (e) {
-      debugPrint(' Failed to load station_id_map.json: $e');
+      debugPrint('❌ Failed to load station_id_map.json: $e');
     }
   }
+
+  // -------------------- BUILD --------------------
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +194,7 @@ class _HomeTabState extends State<HomeTab> {
             ),
             onMapCreated: (c) async {
               _map = c;
+
               await _loadAndBuildMask();
               await _loadStations();
               await _rebuildMarkersForZoom(_currentZoom);
@@ -234,21 +235,21 @@ class _HomeTabState extends State<HomeTab> {
                         decoration: InputDecoration(
                           hintText: 'ابحث عن اسم المحطة…',
                           prefixIcon:
-                          const Icon(Icons.search, color: Color(0xFFD12027)),
+                              const Icon(Icons.search, color: Color(0xFFD12027)),
                           suffixIcon: _searchCtrl.text.isEmpty
                               ? null
                               : IconButton(
-                            icon: const Icon(Icons.clear,
-                                color: Color(0xFF9CA3AF)),
-                            onPressed: () {
-                              setState(() {
-                                _searchCtrl.clear();
-                                _suggestions.clear();
-                                _showSuggestions = false;
-                              });
-                              _searchFocus.requestFocus();
-                            },
-                          ),
+                                  icon: const Icon(Icons.clear,
+                                      color: Color(0xFF9CA3AF)),
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchCtrl.clear();
+                                      _suggestions.clear();
+                                      _showSuggestions = false;
+                                    });
+                                    _searchFocus.requestFocus();
+                                  },
+                                ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide.none,
@@ -298,12 +299,12 @@ class _HomeTabState extends State<HomeTab> {
                                 subtitle: subtitle.isEmpty
                                     ? null
                                     : Text(
-                                  subtitle,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF6B7280),
-                                  ),
-                                ),
+                                        subtitle,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
                                 onTap: () async {
                                   setState(() {
                                     _searchCtrl.text = st.name;
@@ -323,9 +324,10 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
           ),
+
           Positioned(
             right: 16,
-            bottom: 100, 
+            bottom: 100,
             child: FloatingActionButton(
               heroTag: "locBtn",
               backgroundColor: Colors.white,
@@ -354,11 +356,12 @@ class _HomeTabState extends State<HomeTab> {
               },
             ),
           ),
-
         ],
       ),
     );
   }
+
+  // -------------------- SEARCH (unchanged) --------------------
 
   void _onQueryChanged(String qRaw) {
     final q = _normalizeForSearch(qRaw);
@@ -459,6 +462,7 @@ class _HomeTabState extends State<HomeTab> {
       }
     }
   }
+
   void _openSheet(BuildContext context, Station st) {
     if (_sheetOpen) {
       Navigator.of(context, rootNavigator: true).maybePop();
@@ -476,7 +480,7 @@ class _HomeTabState extends State<HomeTab> {
       isDismissible: true,
       enableDrag: true,
       builder: (ctx) {
-        double childSize = 0.32; 
+        double childSize = 0.32;
 
         return StatefulBuilder(
           builder: (context, setStateSheet) {
@@ -484,11 +488,9 @@ class _HomeTabState extends State<HomeTab> {
               onVerticalDragEnd: (details) {
                 final velocity = details.primaryVelocity ?? 0;
 
-              
                 if (velocity < -50) {
                   setStateSheet(() => childSize = 0.75);
                 }
-
 
                 if (velocity > 50) {
                   setStateSheet(() => childSize = 0.25);
@@ -505,7 +507,8 @@ class _HomeTabState extends State<HomeTab> {
                     child: Container(
                       decoration: const BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(24)),
                       ),
                       child: Column(
                         children: [
@@ -541,7 +544,6 @@ class _HomeTabState extends State<HomeTab> {
     });
   }
 
-
   Future<void> _goToStation(Station st, {bool openSheet = false}) async {
     final targetZoom = _currentZoom < 14.5 ? 14.5 : _currentZoom;
     await _map?.animateCamera(
@@ -554,6 +556,8 @@ class _HomeTabState extends State<HomeTab> {
       });
     }
   }
+
+  // -------------------- MARKERS (unchanged) --------------------
 
   Future<void> _rebuildMarkersForZoom(double zoom) async {
     final size = _sizeForZoom(zoom);
@@ -570,7 +574,7 @@ class _HomeTabState extends State<HomeTab> {
       );
 
       final markerId =
-      MarkerId('${st.name}-${st.position.latitude},${st.position.longitude}');
+          MarkerId('${st.name}-${st.position.latitude},${st.position.longitude}');
       newMarkers.add(
         Marker(
           markerId: markerId,
@@ -612,12 +616,11 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<BitmapDescriptor> _stationIconForColors(
-      List<Color> colors, {
-        double size = 32,
-        double ringThickness = 6,
-      }) async {
-    final key =
-        '${colors.map((c) => c.value).join(",")}-$size-$ringThickness';
+    List<Color> colors, {
+    double size = 32,
+    double ringThickness = 6,
+  }) async {
+    final key = '${colors.map((c) => c.value).join(",")}-$size-$ringThickness';
     final cached = _iconCache[key];
     if (cached != null) return cached;
 
@@ -670,7 +673,8 @@ class _HomeTabState extends State<HomeTab> {
       for (int i = 0; i < n; i++) {
         paintSeg.color = colors[i % colors.length];
         final startDeg = -90.0 + sweep * i;
-        canvas.drawArc(rect, _deg2rad(startDeg), _deg2rad(sweep), false, paintSeg);
+        canvas.drawArc(
+            rect, _deg2rad(startDeg), _deg2rad(sweep), false, paintSeg);
       }
     }
 
@@ -690,10 +694,12 @@ class _HomeTabState extends State<HomeTab> {
 
   double _deg2rad(double d) => d * pi / 180.0;
 
+  // -------------------- MASK (unchanged) --------------------
+
   Future<void> _loadAndBuildMask() async {
     try {
       final raw =
-      await rootBundle.loadString('assets/data/riyadh_boundary.geojson');
+          await rootBundle.loadString('assets/data/riyadh_boundary.geojson');
       final geo = json.decode(raw);
 
       final rings = _extractOuterRings(geo);
@@ -708,7 +714,7 @@ class _HomeTabState extends State<HomeTab> {
 
       final partsCW = rings.map((r) => _ensureCW(r)).toList();
       final mergedOutlineCW =
-      _computeUnionOutlineRings(partsCW, precision: 1e-6);
+          _computeUnionOutlineRings(partsCW, precision: 1e-6);
       final holesCCW = mergedOutlineCW.map((r) => _ensureCCW(r)).toList();
 
       _polygons
@@ -755,7 +761,7 @@ class _HomeTabState extends State<HomeTab> {
 
       setState(() {});
     } catch (e) {
-      debugPrint(' Failed to load boundary GeoJSON: $e');
+      debugPrint('❌ Failed to load boundary GeoJSON: $e');
     }
   }
 
@@ -849,9 +855,9 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   List<List<LatLng>> _computeUnionOutlineRings(
-      List<List<LatLng>> parts, {
-        double precision = 1e-6,
-      }) {
+    List<List<LatLng>> parts, {
+    double precision = 1e-6,
+  }) {
     final edgeCount = <String, int>{};
 
     for (final ring in parts) {
@@ -951,6 +957,9 @@ class _HomeTabState extends State<HomeTab> {
 
     return outlines;
   }
+
+  // -------------------- STATIONS (unchanged) --------------------
+
   Future<void> _loadStations() async {
     try {
       final stations = await StationLoader.loadStations();
@@ -959,17 +968,29 @@ class _HomeTabState extends State<HomeTab> {
         ..addAll(stations);
       if (mounted) setState(() {});
     } catch (e) {
-      debugPrint('Failed to load stations JSON: $e');
+      debugPrint('❌ Failed to load stations JSON: $e');
     }
   }
 
   String _shortLineName(String line) {
-    if (line.contains('الأزرق') || line.toLowerCase().contains('blue')) return 'الأزرق';
-    if (line.contains('الأحمر') || line.toLowerCase().contains('red')) return 'الأحمر';
-    if (line.contains('البرتقالي') || line.toLowerCase().contains('orange')) return 'البرتقالي';
-    if (line.contains('الأخضر') || line.toLowerCase().contains('green')) return 'الأخضر';
-    if (line.contains('الأصفر') || line.toLowerCase().contains('yellow')) return 'الأصفر';
-    if (line.contains('البنفسجي') || line.toLowerCase().contains('purple')) return 'البنفسجي';
+    if (line.contains('الأزرق') || line.toLowerCase().contains('blue')) {
+      return 'الأزرق';
+    }
+    if (line.contains('الأحمر') || line.toLowerCase().contains('red')) {
+      return 'الأحمر';
+    }
+    if (line.contains('البرتقالي') || line.toLowerCase().contains('orange')) {
+      return 'البرتقالي';
+    }
+    if (line.contains('الأخضر') || line.toLowerCase().contains('green')) {
+      return 'الأخضر';
+    }
+    if (line.contains('الأصفر') || line.toLowerCase().contains('yellow')) {
+      return 'الأصفر';
+    }
+    if (line.contains('البنفسجي') || line.toLowerCase().contains('purple')) {
+      return 'البنفسجي';
+    }
     return line;
   }
 
