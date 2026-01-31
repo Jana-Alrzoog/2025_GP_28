@@ -29,9 +29,8 @@ def ask(req: AskReq):
         session = get_session(session_id)
         state = session.get("state", "menu")
 
-        # -----------------------------
         # MAIN MENU
-        # -----------------------------
+
         if question.lower() in ["menu", "start"] and state == "menu":
             return {
                 "matched_faq_id": None,
@@ -39,9 +38,8 @@ def ask(req: AskReq):
                 "confidence": 1.0
             }
 
-        # -----------------------------
         # LOST & FOUND FLOW
-        # -----------------------------
+
         if question == "2" or str(state).startswith("lf_"):
             if not req.passenger_id:
                 return {
@@ -62,9 +60,8 @@ def ask(req: AskReq):
                 "confidence": 1.0
             }
 
-        # -----------------------------
         # GENERAL QUESTIONS (FAQ + LLM)
-        # -----------------------------
+
         faqs = fetch_all_faq()
         result = ask_llm(question, faqs)
 
@@ -82,9 +79,8 @@ def ask(req: AskReq):
         }
 
 
-# ---------------------------------
 # Upload image endpoint (optional)
-# ---------------------------------
+
 @app.post("/lost-found/upload-image")
 async def upload_image(
     file: UploadFile = File(...),
