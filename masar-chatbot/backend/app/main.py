@@ -1,0 +1,83 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from app.firestore import fetch_all_faq
+from app.llm_client import ask_llm
+
+# Lost & Found imports
+from app.lost_found_flow import handle_lost_found_flow
+from app.session_store import get_session
+
+app = FastAPI()
+
+
+# Request model from frontend
+class AskReq(BaseModel):
+    question: str
+    session_id: str | None = None     
+    passenger_id: str | None = None   
+
+
+@app.post("/ask")
+def ask(req: AskReq):
+    try:
+        question = (req.question or "").strip()
+        session_id = req.session_id or "default_user"
+
+        # Get current session state
+        session = get_session(session_id)
+        state = session.get("state", "menu")
+
+  
+        # MAIN MENU (first interaction)
+     
+        if question.lower() in ["menu", "start"] and state == "menu":
+            return {
+                "matched_faq_id": None,
+                "answer": "أهلاً بك في مساعدك مسار 🤖🚇\nكيف أقدر أساعدك اليوم؟\n\n1️⃣ الأسئلة العامة\n2️⃣ الإبلاغ عن مفقودات",
+                "confidence": 1.0
+            }
+
+        # LOST & FOUND FLOW (Form-like chat)
+        
+        # If user selects option 2 or is already inside LF flow
+        if question == "2" or str(state).startswith("lf_"):
+            # passenger_id must exist because Lost & Found requires login
+            if not req.passenger_id:
+                return {
+                    "matched_faq_id": None,
+                    "answer": "للمتابعة في خدمة المفقودات، يرجى تسجيل الدخول أولاً.",
+                    "confidence": 1.0
+                }
+
+            reply_text = handle_lost_found_flow(
+                session_id=session_id,
+                user_message=question,     
+                passenger_id=req.passenger_id
+            )
+
+            return {
+                "matched_faq_id": None,
+                "answer": reply_text,
+                "confidence": 1.0
+            }
+
+        
+        # GENERAL QUESTIONS (FAQ + LLM)
+        
+        faqs = fetch_all_faq()
+        result = ask_llm(question, faqs)
+
+        return {
+            "matched_faq_id": result.get("matched_faq_id", None),
+            "answer": result.get("answer", ""),
+            "confidence": float(result.get("confidence", 0.0) or 0.0),
+        }
+
+    except Exception as e:
+        # Catch unexpected server errors
+        return {
+            "matched_faq_id": None,
+            "answer": f"SERVER_ERROR: {type(e).__name__}: {str(e)}",
+            "confidence": 0.0
+        }
