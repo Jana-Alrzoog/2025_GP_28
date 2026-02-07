@@ -49,16 +49,25 @@ def _extract_photo_url(msg: str) -> str:
     msg = (msg or "").strip()
     if msg.startswith("PHOTO_URL:"):
         return msg.replace("PHOTO_URL:", "", 1).strip()
-    return msg  # if it's already a url
+    return msg
 
 
 def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str) -> str:
     """
     Lost & Found flow (chat-based form).
     Requires passenger_id (user is logged in).
+
+    ✅ Updated to use per-user session key:
+    get_session(passenger_id, session_id)
+    save_session(passenger_id, session_id, state, data)
     """
 
-    session = get_session(session_id)
+    # ✅ Safety: ensure we always have some passenger_id key
+    pid = (passenger_id or "").strip()
+    if not pid:
+        pid = "anonymous"
+
+    session = get_session(pid, session_id)
     state = session.get("state", "menu")
     data = session.get("data", {}) or {}
 
@@ -70,7 +79,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
 
     # START FLOW
     if state == "menu":
-        save_session(session_id, "lf_item_type", data)
+        save_session(pid, session_id, "lf_item_type", data)
         return (
             "🧳 سأساعدك في الإبلاغ عن مفقود.\n\n"
             "ما نوع الشيء المفقود؟\n"
@@ -82,7 +91,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         if not user_message:
             return "فضلاً اكتب نوع الشيء المفقود (مثال: جوال، حقيبة...)."
         data["item_type"] = user_message
-        save_session(session_id, "lf_description", data)
+        save_session(pid, session_id, "lf_description", data)
         return "✏️ صف الشيء المفقود بتفصيل (اللون، الحجم، أي علامة مميزة)."
 
     # DESCRIPTION
@@ -92,7 +101,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         data["description"] = user_message
 
         # Ask about optional photo
-        save_session(session_id, "lf_photo_choice", data)
+        save_session(pid, session_id, "lf_photo_choice", data)
         return (
             "📷 هل ترغب/ين بإرفاق صورة للغرض المفقود؟ (اختياري)\n\n"
             "1️⃣ نعم\n"
@@ -103,7 +112,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
     if state == "lf_photo_choice":
         if user_message == "1":
             data["photo_url"] = None
-            save_session(session_id, "lf_waiting_photo", data)
+            save_session(pid, session_id, "lf_waiting_photo", data)
             return (
                 "📤 ارفعي/ارفع الصورة من التطبيق الآن.\n"
                 "بعد الرفع، أرسلي الرسالة التالية من التطبيق (أو سيتم إرسالها تلقائيًا):\n"
@@ -112,7 +121,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
 
         if user_message == "2":
             data["photo_url"] = None
-            save_session(session_id, "lf_station", data)
+            save_session(pid, session_id, "lf_station", data)
             return (
                 "📍 في أي محطة فُقد الغرض؟\n\n"
                 f"{_format_options(STATION_OPTIONS)}"
@@ -125,7 +134,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         # Allow skipping photo
         if user_message == "2":
             data["photo_url"] = None
-            save_session(session_id, "lf_station", data)
+            save_session(pid, session_id, "lf_station", data)
             return (
                 "تمام ✅ بدون صورة.\n\n"
                 "📍 في أي محطة فُقد الغرض؟\n\n"
@@ -144,7 +153,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
             return "لم أستلم رابط الصورة بشكل صحيح. حاول رفع الصورة مرة أخرى."
 
         data["photo_url"] = photo_url
-        save_session(session_id, "lf_station", data)
+        save_session(pid, session_id, "lf_station", data)
         return (
             "✅ تم استلام الصورة.\n\n"
             "📍 في أي محطة فُقد الغرض؟\n\n"
@@ -161,7 +170,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         except Exception:
             return "الرجاء اختيار رقم صحيح من قائمة المحطات."
 
-        save_session(session_id, "lf_when", data)
+        save_session(pid, session_id, "lf_when", data)
         return (
             "🕒 متى تقريبًا فُقد الغرض؟\n\n"
             f"{_format_options(WHEN_OPTIONS)}"
@@ -178,10 +187,10 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
             return "الرجاء اختيار رقم صحيح من القائمة."
 
         if data["lost_time_id"] == "older":
-            save_session(session_id, "lf_date", data)
+            save_session(pid, session_id, "lf_date", data)
             return "📅 يرجى كتابة التاريخ التقريبي بصيغة YYYY-MM-DD (مثال: 2026-01-20)."
 
-        save_session(session_id, "lf_name", data)
+        save_session(pid, session_id, "lf_name", data)
         return "👤 ما الاسم الكامل؟"
 
     # DATE
@@ -189,7 +198,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         if not _looks_like_date(user_message):
             return "فضلاً اكتب التاريخ بصيغة YYYY-MM-DD (مثال: 2026-01-20)."
         data["lost_date"] = user_message
-        save_session(session_id, "lf_name", data)
+        save_session(pid, session_id, "lf_name", data)
         return "👤 ما الاسم الكامل؟"
 
     # NAME
@@ -197,7 +206,7 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         if not user_message:
             return "فضلاً اكتب الاسم الكامل."
         data["name"] = user_message
-        save_session(session_id, "lf_phone", data)
+        save_session(pid, session_id, "lf_phone", data)
         return "📞 ما رقم الجوال للتواصل؟"
 
     # PHONE
@@ -230,7 +239,9 @@ def handle_lost_found_flow(session_id: str, user_message: str, passenger_id: str
         }
 
         save_lost_found_report(report)
-        save_session(session_id, "menu", {})
+
+        # ✅ reset session for this passenger+session
+        save_session(pid, session_id, "menu", {})
 
         return (
             "✅ تم تسجيل البلاغ بنجاح.\n"
