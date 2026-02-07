@@ -1,8 +1,17 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:math';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
+import 'package:firebase_auth/firebase_auth.dart';
+
+// Needed for Position type (returned by LocationService)
+import 'package:geolocator/geolocator.dart';
+
+import 'package:Masar_application_1/services/location_service.dart';
 
 class AssistantTab extends StatefulWidget {
   const AssistantTab({super.key});
@@ -15,31 +24,65 @@ class _AssistantTabState extends State<AssistantTab> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
 
-  final List<_Msg> _msgs = [
-    _Msg(text: 'أهلًا! اكتب start عشان نبدأ 👋', fromBot: true),
-  ];
+  final List<_Msg> _msgs = [];
 
   static const double _inputBarHeight = 68;
 
-
   late final String _baseUrl = _detectBaseUrl();
 
-  final String _sessionId = "test_session_1";
-  final String _passengerId = "042dTZgI0sb1DyMMFZfpwd5tgCs2";
+  // Session is generated per tab open to avoid mixing old chats.
+  late String _sessionId;
 
-  // Options extracted from bot message
+  // Passenger id comes from Firebase user uid.
+  String? _passengerId;
+
   List<_OptionItem> _lastOptions = [];
   bool _hasOptions = false;
 
+  bool _loadingMenu = false;
+  bool _sessionReady = false;
+
   String _detectBaseUrl() {
-    if (kIsWeb) {
-      return "http://127.0.0.1:8000";
-    }
-    if (Platform.isAndroid) {
-      // Android emulator
-      return "http://10.0.2.2:8000";
-    }
+    if (kIsWeb) return "http://127.0.0.1:8000";
+    if (Platform.isAndroid) return "http://10.0.2.2:8000";
     return "http://127.0.0.1:8000";
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initSession();
+      if (!mounted) return;
+      await _loadMenuOnOpen();
+    });
+  }
+
+  Future<void> _initSession() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint("AssistantTab: Firebase user is null (not signed in).");
+      setState(() {
+        _sessionReady = false;
+        _passengerId = null;
+      });
+      return;
+    }
+
+    _passengerId = user.uid;
+
+    // Generate a unique session id each time the tab opens.
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final rand = Random().nextInt(1 << 30);
+    _sessionId = "${user.uid}_$now_$rand";
+
+    debugPrint("AssistantTab: passenger_id = $_passengerId");
+    debugPrint("AssistantTab: session_id = $_sessionId");
+
+    setState(() {
+      _sessionReady = true;
+    });
   }
 
   @override
@@ -52,11 +95,55 @@ class _AssistantTabState extends State<AssistantTab> {
   Future<String> _askBackend(String text) async {
     final uri = Uri.parse("$_baseUrl/ask");
 
+    if (!_sessionReady || _passengerId == null) {
+      return "لم يتم تسجيل الدخول. سجلي دخولك ثم افتحي المساعد مرة ثانية.";
+    }
+
+    double? lat;
+    double? lon;
+
+    final bool useLocation = await LocationService.getUseLocation();
+    final bool asked = await LocationService.getHasAsked();
+
+    debugPrint("useLocation = $useLocation");
+    debugPrint("asked_location = $asked");
+
+    if (useLocation) {
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      debugPrint("locationServiceEnabled = $serviceEnabled");
+
+      if (!asked) {
+        final perm = await LocationService.requestPermission();
+        await LocationService.setHasAsked(true);
+        debugPrint("requestPermission result = $perm");
+      }
+
+      final LocationPermission currentPerm = await Geolocator.checkPermission();
+      debugPrint("checkPermission = $currentPerm");
+
+      final Position? pos = await LocationService.getCurrentPosition();
+      debugPrint("pos = $pos");
+
+      lat = pos?.latitude;
+      lon = pos?.longitude;
+
+      debugPrint("lat = $lat, lon = $lon");
+
+      // If user enabled location but we could not retrieve it, return a clear message
+      if (lat == null || lon == null) {
+        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق، وإذا كنت على Emulator حددي Location من إعدادات المحاكي.";
+      }
+    }
+
     final body = {
       "question": text,
       "session_id": _sessionId,
       "passenger_id": _passengerId,
+      "lat": lat,
+      "lon": lon,
     };
+
+    debugPrint("POST /ask body = ${jsonEncode(body)}");
 
     try {
       final res = await http
@@ -68,7 +155,7 @@ class _AssistantTabState extends State<AssistantTab> {
           .timeout(const Duration(seconds: 12));
 
       if (res.statusCode != 200) {
-        return "⚠️ Server error: ${res.statusCode}";
+        return "Server error: ${res.statusCode}";
       }
 
       final data = jsonDecode(res.body);
@@ -78,8 +165,41 @@ class _AssistantTabState extends State<AssistantTab> {
           "Check:\n"
           "- backend running on port 8000\n"
           "- baseUrl = $_baseUrl\n"
-          "- same Wi-Fi if using real phone";
+          "- same Wi-Fi if using a real phone";
     }
+  }
+
+  Future<void> _loadMenuOnOpen() async {
+    if (_loadingMenu) return;
+    _loadingMenu = true;
+
+    // Always reset UI state when opening the tab
+    setState(() {
+      _msgs.clear();
+      _hasOptions = false;
+      _lastOptions = [];
+    });
+
+    _setTyping(true);
+    _scrollDown();
+
+    // Always request menu explicitly at the beginning
+    final answer = await _askBackend("MENU");
+
+    if (!mounted) return;
+
+    _setTyping(false);
+
+    setState(() {
+      _msgs.add(_Msg(
+        text: answer.isEmpty ? "Empty reply" : answer,
+        fromBot: true,
+      ));
+    });
+
+    _extractOptionsFromBot(answer);
+    _scrollDown();
+    _loadingMenu = false;
   }
 
   void _scrollDown() {
@@ -100,7 +220,6 @@ class _AssistantTabState extends State<AssistantTab> {
     for (final l in lines) {
       final line = l.trim();
 
-      // pattern 1: 1 خيار
       final matchEmoji = RegExp(r'^(\d+)️⃣\s+(.+)$').firstMatch(line);
       if (matchEmoji != null) {
         options.add(_OptionItem(
@@ -110,7 +229,6 @@ class _AssistantTabState extends State<AssistantTab> {
         continue;
       }
 
-      // pattern 2: 1 - خيار
       final matchDash = RegExp(r'^(\d+)\s*[-–]\s*(.+)$').firstMatch(line);
       if (matchDash != null) {
         options.add(_OptionItem(
@@ -130,7 +248,7 @@ class _AssistantTabState extends State<AssistantTab> {
   void _setTyping(bool on) {
     setState(() {
       if (on) {
-        _msgs.add(_Msg(text: "…", fromBot: true, isTyping: true));
+        _msgs.add(_Msg(text: "...", fromBot: true, isTyping: true));
       } else {
         _msgs.removeWhere((m) => m.isTyping);
       }
@@ -144,7 +262,11 @@ class _AssistantTabState extends State<AssistantTab> {
     setState(() {
       _msgs.add(_Msg(text: txt, fromBot: false));
       if (forcedText == null) _controller.clear();
+
+      _hasOptions = false;
+      _lastOptions = [];
     });
+
     _scrollDown();
 
     _setTyping(true);
@@ -157,50 +279,43 @@ class _AssistantTabState extends State<AssistantTab> {
     _setTyping(false);
 
     setState(() {
-      _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
+      _msgs.add(_Msg(
+        text: answer.isEmpty ? "Empty reply" : answer,
+        fromBot: true,
+      ));
     });
 
     _extractOptionsFromBot(answer);
     _scrollDown();
   }
 
-  void _openOptionsSheet() {
-    if (_lastOptions.isEmpty) return;
+  Widget _buildOptionButtons() {
+    if (!_hasOptions || _lastOptions.isEmpty) return const SizedBox.shrink();
 
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "اختاري من القائمة",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _lastOptions.map((opt) {
-                    return ActionChip(
-                      label: Text("${opt.index} - ${opt.label}"),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _send(opt.index.toString());
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 10),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _lastOptions.map((opt) {
+          return ElevatedButton(
+            onPressed: () {
+              _send(opt.index.toString());
+            },
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: const Color(0xFFF1F1F1),
+              foregroundColor: Colors.black87,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.black.withOpacity(.08)),
+              ),
             ),
-          ),
-        );
-      },
+            child: Text(opt.label, textDirection: TextDirection.rtl),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -209,14 +324,27 @@ class _AssistantTabState extends State<AssistantTab> {
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, _inputBarHeight + 80),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, _inputBarHeight + 90),
           child: ListView.builder(
             controller: _scroll,
             itemCount: _msgs.length,
-            itemBuilder: (_, i) => _ChatBubble(msg: _msgs[i]),
+            itemBuilder: (_, i) {
+              final msg = _msgs[i];
+
+              final isLastBotMsgWithOptions =
+                  msg.fromBot && !msg.isTyping && _hasOptions && i == _msgs.length - 1;
+
+              return Column(
+                crossAxisAlignment:
+                    msg.fromBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                children: [
+                  _ChatBubble(msg: msg),
+                  if (isLastBotMsgWithOptions) _buildOptionButtons(),
+                ],
+              );
+            },
           ),
         ),
-
         Positioned(
           left: 0,
           right: 0,
@@ -234,22 +362,16 @@ class _AssistantTabState extends State<AssistantTab> {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Row(
                     children: [
-                      if (_hasOptions) ...[
-                        IconButton(
-                          tooltip: "اختيار من القائمة",
-                          onPressed: _openOptionsSheet,
-                          icon: const Icon(Icons.filter_list),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-
                       Expanded(
                         child: TextField(
                           controller: _controller,
+                          textDirection: TextDirection.rtl,
+                          textAlign: TextAlign.right,
+                          keyboardType: TextInputType.text,
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => _send(),
                           decoration: InputDecoration(
-                            hintText: 'اكتب رسالتك… (مثال: start أو menu)',
+                            hintText: 'اكتب رسالتك…',
                             filled: true,
                             fillColor: const Color(0xFFF5F5F5),
                             contentPadding: const EdgeInsets.symmetric(
@@ -338,6 +460,7 @@ class _ChatBubble extends StatelessWidget {
           ),
           child: Text(
             msg.text,
+            textDirection: TextDirection.rtl,
             style: TextStyle(color: fg, height: 1.4),
           ),
         ),

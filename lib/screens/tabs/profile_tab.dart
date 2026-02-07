@@ -6,7 +6,7 @@ import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// ✅ صفحة اختيار المحطات (ملف جديد داخل tabs)
+// Select stations screen
 import 'select_stations_screen.dart';
 
 void showTopToast(BuildContext context, String message) {
@@ -95,7 +95,6 @@ class _ProfileTabState extends State<ProfileTab> {
   String fullName = "الاسم غير متاح";
   String email = "البريد غير متاح";
 
-  // مهم: يبدأ false عشان ما يظهر "تحديد المحطات" شغال بدون قراءة
   bool _notificationsOn = false;
 
   @override
@@ -362,7 +361,6 @@ class _ProfileTabState extends State<ProfileTab> {
               physics: const NeverScrollableScrollPhysics(),
               childAspectRatio: 1.5,
               children: [
-                // ✅ الإشعارات
                 _NotificationsToggleTile(
                   onSyncValue: (v) {
                     if (mounted) setState(() => _notificationsOn = v);
@@ -371,7 +369,6 @@ class _ProfileTabState extends State<ProfileTab> {
 
                 const _LocationToggleTile(),
 
-                // ✅ تحديد المحطات
                 _NavTile(
                   title: 'تحديد المحطات',
                   icon: Icons.location_on_outlined,
@@ -416,7 +413,7 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 }
 
-/// ✅ الإشعارات
+/// Notifications tile (unchanged)
 class _NotificationsToggleTile extends StatefulWidget {
   final ValueChanged<bool>? onSyncValue;
 
@@ -566,6 +563,7 @@ class _NotificationsToggleTileState extends State<_NotificationsToggleTile> {
   }
 }
 
+/// Location tile (fixed)
 class _LocationToggleTile extends StatefulWidget {
   const _LocationToggleTile({super.key});
 
@@ -595,10 +593,14 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
   Future<void> _onChanged(bool value) async {
     if (!value) {
       await LocationService.setUseLocation(false);
+      await LocationService.setHasAsked(false); // reset asked flag
       if (!mounted) return;
       setState(() => _isOn = false);
       return;
     }
+
+    // Mark asked before requesting permission so other screens do not ask again
+    await LocationService.setHasAsked(true);
 
     final perm = await LocationService.requestPermission();
     final granted =
@@ -612,6 +614,20 @@ class _LocationToggleTileState extends State<_LocationToggleTile> {
       showBottomBlackSnack(
         context,
         'لم يتم منح صلاحية الموقع من النظام. فعّليها من إعدادات الجهاز.',
+      );
+      return;
+    }
+
+    // Optional: try to fetch a quick position to validate services are on
+    final pos = await LocationService.getCurrentPosition();
+    if (pos == null) {
+      await LocationService.setUseLocation(false);
+      if (!mounted) return;
+      setState(() => _isOn = false);
+
+      showBottomBlackSnack(
+        context,
+        'لا يمكن تحديد موقعك الآن. تأكدي من تشغيل خدمة الموقع في الجهاز.',
       );
       return;
     }
