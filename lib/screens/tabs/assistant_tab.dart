@@ -1,16 +1,17 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 
-// Needed for Position type (returned by LocationService)
 import 'package:geolocator/geolocator.dart';
-
 import 'package:Masar_application_1/services/location_service.dart';
 
 class AssistantTab extends StatefulWidget {
@@ -23,17 +24,11 @@ class AssistantTab extends StatefulWidget {
 class _AssistantTabState extends State<AssistantTab> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
-
   final List<_Msg> _msgs = [];
-
-  static const double _inputBarHeight = 68;
 
   late final String _baseUrl = _detectBaseUrl();
 
-  // Session is generated per tab open to avoid mixing old chats.
   late String _sessionId;
-
-  // Passenger id comes from Firebase user uid.
   String? _passengerId;
 
   List<_OptionItem> _lastOptions = [];
@@ -42,16 +37,18 @@ class _AssistantTabState extends State<AssistantTab> {
   bool _loadingMenu = false;
   bool _sessionReady = false;
 
+  final ImagePicker _picker = ImagePicker();
+  bool _uploadingImage = false;
+
   String _detectBaseUrl() {
     if (kIsWeb) return "http://127.0.0.1:8000";
-    if (Platform.isAndroid) return "http://10.0.2.2:8000";
-    return "http://127.0.0.1:8000";
+    // Android emulator
+    return "http://10.0.2.2:8000";
   }
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initSession();
       if (!mounted) return;
@@ -62,7 +59,6 @@ class _AssistantTabState extends State<AssistantTab> {
   Future<void> _initSession() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      debugPrint("AssistantTab: Firebase user is null (not signed in).");
       setState(() {
         _sessionReady = false;
         _passengerId = null;
@@ -72,13 +68,9 @@ class _AssistantTabState extends State<AssistantTab> {
 
     _passengerId = user.uid;
 
-    // Generate a unique session id each time the tab opens.
     final now = DateTime.now().millisecondsSinceEpoch;
     final rand = Random().nextInt(1 << 30);
-    _sessionId = "${user.uid}_$now_$rand";
-
-    debugPrint("AssistantTab: passenger_id = $_passengerId");
-    debugPrint("AssistantTab: session_id = $_sessionId");
+    _sessionId = "${user.uid}_$now$rand";
 
     setState(() {
       _sessionReady = true;
@@ -92,11 +84,34 @@ class _AssistantTabState extends State<AssistantTab> {
     super.dispose();
   }
 
-  Future<String> _askBackend(String text) async {
+  Future<String> _uploadToStorageAndGetUrl(XFile file) async {
+    final uid = _passengerId ?? "anonymous";
+
+    final ext = p.extension(file.name);
+    final safeExt = ext.isEmpty ? ".jpg" : ext;
+    final filename = "lf_${DateTime.now().millisecondsSinceEpoch}$safeExt";
+
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child("lost_found_reports")
+        .child(uid)
+        .child(_sessionId)
+        .child(filename);
+
+    final Uint8List bytes = await file.readAsBytes();
+    await ref.putData(
+      bytes,
+      SettableMetadata(contentType: "image/jpeg"),
+    );
+
+    return await ref.getDownloadURL();
+  }
+
+  Future<String> _askBackend(String text, {String? photoUrl}) async {
     final uri = Uri.parse("$_baseUrl/ask");
 
     if (!_sessionReady || _passengerId == null) {
-      return "لم يتم تسجيل الدخول. سجلي دخولك ثم افتحي المساعد مرة ثانية.";
+      return "لم يتم تسجيل الدخول. سجّل دخولك ثم افتح المساعد مرة ثانية.";
     }
 
     double? lat;
@@ -105,33 +120,28 @@ class _AssistantTabState extends State<AssistantTab> {
     final bool useLocation = await LocationService.getUseLocation();
     final bool asked = await LocationService.getHasAsked();
 
-    debugPrint("useLocation = $useLocation");
-    debugPrint("asked_location = $asked");
-
     if (useLocation) {
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      debugPrint("locationServiceEnabled = $serviceEnabled");
 
       if (!asked) {
-        final perm = await LocationService.requestPermission();
+        await LocationService.requestPermission();
         await LocationService.setHasAsked(true);
-        debugPrint("requestPermission result = $perm");
       }
 
       final LocationPermission currentPerm = await Geolocator.checkPermission();
-      debugPrint("checkPermission = $currentPerm");
+
+      if (!serviceEnabled ||
+          currentPerm == LocationPermission.denied ||
+          currentPerm == LocationPermission.deniedForever) {
+        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.";
+      }
 
       final Position? pos = await LocationService.getCurrentPosition();
-      debugPrint("pos = $pos");
-
       lat = pos?.latitude;
       lon = pos?.longitude;
 
-      debugPrint("lat = $lat, lon = $lon");
-
-      // If user enabled location but we could not retrieve it, return a clear message
       if (lat == null || lon == null) {
-        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق، وإذا كنت على Emulator حددي Location من إعدادات المحاكي.";
+        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.";
       }
     }
 
@@ -141,9 +151,8 @@ class _AssistantTabState extends State<AssistantTab> {
       "passenger_id": _passengerId,
       "lat": lat,
       "lon": lon,
+      "photo_url": photoUrl,
     };
-
-    debugPrint("POST /ask body = ${jsonEncode(body)}");
 
     try {
       final res = await http
@@ -152,7 +161,7 @@ class _AssistantTabState extends State<AssistantTab> {
             headers: {"Content-Type": "application/json"},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 20));
 
       if (res.statusCode != 200) {
         return "Server error: ${res.statusCode}";
@@ -160,7 +169,7 @@ class _AssistantTabState extends State<AssistantTab> {
 
       final data = jsonDecode(res.body);
       return (data["answer"] ?? "").toString().trim();
-    } catch (e) {
+    } catch (_) {
       return "Failed to connect to server.\n"
           "Check:\n"
           "- backend running on port 8000\n"
@@ -173,7 +182,6 @@ class _AssistantTabState extends State<AssistantTab> {
     if (_loadingMenu) return;
     _loadingMenu = true;
 
-    // Always reset UI state when opening the tab
     setState(() {
       _msgs.clear();
       _hasOptions = false;
@@ -183,18 +191,13 @@ class _AssistantTabState extends State<AssistantTab> {
     _setTyping(true);
     _scrollDown();
 
-    // Always request menu explicitly at the beginning
     final answer = await _askBackend("MENU");
-
     if (!mounted) return;
 
     _setTyping(false);
 
     setState(() {
-      _msgs.add(_Msg(
-        text: answer.isEmpty ? "Empty reply" : answer,
-        fromBot: true,
-      ));
+      _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
     });
 
     _extractOptionsFromBot(answer);
@@ -262,31 +265,78 @@ class _AssistantTabState extends State<AssistantTab> {
     setState(() {
       _msgs.add(_Msg(text: txt, fromBot: false));
       if (forcedText == null) _controller.clear();
-
       _hasOptions = false;
       _lastOptions = [];
     });
 
     _scrollDown();
-
     _setTyping(true);
     _scrollDown();
 
     final answer = await _askBackend(txt);
-
     if (!mounted) return;
 
     _setTyping(false);
 
     setState(() {
-      _msgs.add(_Msg(
-        text: answer.isEmpty ? "Empty reply" : answer,
-        fromBot: true,
-      ));
+      _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
     });
 
     _extractOptionsFromBot(answer);
     _scrollDown();
+  }
+
+  Future<void> _attachAndSendImage() async {
+    if (_uploadingImage) return;
+
+    if (!_sessionReady || _passengerId == null) {
+      setState(() {
+        _msgs.add(_Msg(text: "لم يتم تسجيل الدخول.", fromBot: true));
+      });
+      return;
+    }
+
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setState(() {
+        _uploadingImage = true;
+        _hasOptions = false;
+        _lastOptions = [];
+        _msgs.add(_Msg(text: "تم إرفاق صورة", fromBot: false));
+      });
+
+      _scrollDown();
+      _setTyping(true);
+      _scrollDown();
+
+      final url = await _uploadToStorageAndGetUrl(picked);
+
+      final answer = await _askBackend("تم", photoUrl: url);
+      if (!mounted) return;
+
+      _setTyping(false);
+
+      setState(() {
+        _uploadingImage = false;
+        _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
+      });
+
+      _extractOptionsFromBot(answer);
+      _scrollDown();
+    } catch (_) {
+      if (!mounted) return;
+      _setTyping(false);
+      setState(() {
+        _uploadingImage = false;
+        _msgs.add(_Msg(text: "صار خطأ في رفع الصورة. جرّب مرة ثانية.", fromBot: true));
+      });
+      _scrollDown();
+    }
   }
 
   Widget _buildOptionButtons() {
@@ -299,9 +349,7 @@ class _AssistantTabState extends State<AssistantTab> {
         runSpacing: 8,
         children: _lastOptions.map((opt) {
           return ElevatedButton(
-            onPressed: () {
-              _send(opt.index.toString());
-            },
+            onPressed: () => _send(opt.index.toString()),
             style: ElevatedButton.styleFrom(
               elevation: 0,
               backgroundColor: const Color(0xFFF1F1F1),
@@ -319,18 +367,111 @@ class _AssistantTabState extends State<AssistantTab> {
     );
   }
 
+  // NEW: input bar height constants (so list padding matches perfectly)
+  static const double _inputBarH = 58;
+
+  //  CHANGED: closer to bottom bar
+  static const double _gapAboveNav = 4;
+
+  //  CHANGED: smaller => input goes LOWER
+  static const double bottomNavTotalHeight = 72;
+
+  // WhatsApp-like input bar.
+  Widget _buildInputBar(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(24),
+                color: Colors.white,
+                child: SizedBox(
+                  height: _inputBarH,
+                  child: TextField(
+                    controller: _controller,
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.right,
+                    enabled: !_uploadingImage,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    decoration: InputDecoration(
+                      hintText: _uploadingImage ? 'جاري رفع الصورة…' : 'اكتب رسالتك…',
+                      filled: true,
+                      fillColor: const Color(0xFFF5F5F5),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      // clearer circular gallery button (lighter color)
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Material(
+                          color: const Color(0xFFE6E6E6), // lighter
+                          elevation: 1,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _uploadingImage ? null : _attachAndSendImage,
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Icon(
+                                Icons.photo_outlined, // gallery icon (NOT camera)
+                                size: 20,
+                                color: _uploadingImage
+                                    ? Colors.black26
+                                    : const Color(0xFF3A3A3A),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(59, 59, 59, 1),
+                borderRadius: BorderRadius.circular(23),
+              ),
+              child: IconButton(
+                onPressed: _uploadingImage ? null : _send,
+                icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                tooltip: "Send",
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+
+    final inputBottom = safeBottom + bottomNavTotalHeight + _gapAboveNav;
+    final listBottomPadding = inputBottom + _inputBarH + 24;
+
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, _inputBarHeight + 90),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, listBottomPadding),
           child: ListView.builder(
             controller: _scroll,
             itemCount: _msgs.length,
             itemBuilder: (_, i) {
               final msg = _msgs[i];
-
               final isLastBotMsgWithOptions =
                   msg.fromBot && !msg.isTyping && _hasOptions && i == _msgs.length - 1;
 
@@ -348,61 +489,8 @@ class _AssistantTabState extends State<AssistantTab> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: 80,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Material(
-                elevation: 3,
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.white,
-                child: Container(
-                  height: _inputBarHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          textDirection: TextDirection.rtl,
-                          textAlign: TextAlign.right,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _send(),
-                          decoration: InputDecoration(
-                            hintText: 'اكتب رسالتك…',
-                            filled: true,
-                            fillColor: const Color(0xFFF5F5F5),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        onPressed: _send,
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.all(
-                            const Color.fromRGBO(59, 59, 59, 1),
-                          ),
-                          foregroundColor: WidgetStateProperty.all(Colors.white),
-                          shape: WidgetStateProperty.all(const CircleBorder()),
-                        ),
-                        icon: const Icon(Icons.send),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          bottom: inputBottom,
+          child: _buildInputBar(context),
         ),
       ],
     );
