@@ -5,8 +5,8 @@ import '../../screens/signin_screen.dart';
 import '/services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
-// Select stations screen
+import 'track_reports_screen.dart';
+import 'assistant_tab.dart';
 import 'select_stations_screen.dart';
 
 void showTopToast(BuildContext context, String message) {
@@ -85,14 +85,18 @@ void showBottomBlackSnack(BuildContext context, String message) {
 }
 
 class ProfileTab extends StatefulWidget {
-  const ProfileTab({super.key});
+
+  final ValueChanged<int>? onGoToTab; // 👈 جديد
+
+  const ProfileTab({super.key, this.onGoToTab});
+  
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
 class _ProfileTabState extends State<ProfileTab> {
-  String fullName = "الاسم غير متاح";
+  String fullName = "الاسـم غير متاح";
   String email = "البريد غير متاح";
 
   bool _notificationsOn = false;
@@ -114,7 +118,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
     if (doc.exists) {
       setState(() {
-        fullName = doc.data()?['name'] ?? "الاسم غير متاح";
+        fullName = doc.data()?['name'] ?? "الاسـم غير متاح";
         email = doc.data()?['email'] ?? "البريد غير متاح";
       });
     }
@@ -168,7 +172,7 @@ class _ProfileTabState extends State<ProfileTab> {
                       ),
                     ),
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text("إلغاء"),
+                    child: const Text("إلغـاء"),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -181,7 +185,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                     onPressed: () => Navigator.of(context).pop(true),
                     child: const Text(
-                      "تسجيل خروج",
+                      "تسجيـل خروج",
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -197,7 +201,7 @@ class _ProfileTabState extends State<ProfileTab> {
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        showTopToast(context, "تم تسجيل الخروج");
+        showTopToast(context, "تم تسجيـل الخروج");
         await Future.delayed(const Duration(milliseconds: 1500));
         Navigator.pushReplacement(
           context,
@@ -234,7 +238,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'مرحباً $fullName',
+                      'مرحبــاً $fullName',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -280,7 +284,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               Row(
                                 children: [
                                   const Text(
-                                    'الاسم :',
+                                    'الاســــم :',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,
@@ -292,6 +296,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                     style: const TextStyle(
                                       color: Colors.black54,
                                       fontSize: 16,
+                                      fontFamily: 'Handicrafts',
                                     ),
                                   ),
                                 ],
@@ -300,7 +305,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               Row(
                                 children: [
                                   const Text(
-                                    'الإيميل :',
+                                    'الإيمــيل :',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,
@@ -384,15 +389,29 @@ class _ProfileTabState extends State<ProfileTab> {
                   onDisabledTap: () {
                     showBottomBlackSnack(
                       context,
-                      'فعّلي الإشعارات أولاً ثم حددي المحطات.',
+                      'قم بتفعيل الإشعارات أولاً لتحديد المحطات.',
                     );
                   },
                 ),
 
+                 _NavTile(
+                    title: 'الإبلاغ عن المفقودات',
+                    icon: Icons.smart_toy_outlined, 
+                    enabled: true,
+                    onTap: () {
+                      widget.onGoToTab?.call(1); 
+                    },
+                  ),
+
                 _Tile(
                   title: 'تتبع البلاغات',
                   icon: Icons.alt_route,
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TrackReportsScreen()),
+                    );
+                  },
                 ),
 
                 _Tile(
@@ -507,7 +526,7 @@ class _NotificationsToggleTileState extends State<_NotificationsToggleTile> {
 
         showBottomBlackSnack(
           context,
-          'لا يمكن تفعيل الإشعارات بدون إذن. فعّليها من إعدادات الجهاز.',
+          'لا يمكن تفعيل الإشعارات بدون إذن. قم بتفعيلها من إعدادات الجهاز.',
         );
         return;
       }
@@ -547,7 +566,7 @@ class _NotificationsToggleTileState extends State<_NotificationsToggleTile> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'الإشعارات',
+                  'الإشعــــارات',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

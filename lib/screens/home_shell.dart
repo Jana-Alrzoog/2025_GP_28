@@ -5,7 +5,6 @@ import 'tabs/home_tab.dart';
 import 'tabs/assistant_tab.dart';
 import 'tabs/profile_tab.dart';
 
-// ✅ add this
 import '/services/notifications_onboarding.dart';
 
 class HomeShell extends StatefulWidget {
@@ -18,17 +17,20 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  final _pages = const [
-    HomeTab(),
-    AssistantTab(),
-    ProfileTab(),
+  void _setTab(int i) {
+    if (!mounted) return;
+    setState(() => _index = i);
+  }
+
+  late final List<Widget> _pages = [
+    const HomeTab(),
+    const AssistantTab(),
+    ProfileTab(onGoToTab: _setTab),
   ];
 
   @override
   void initState() {
     super.initState();
-
-    // ✅ run once after first frame (context ready)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationsOnboarding.maybeRun(context);
     });
@@ -66,6 +68,12 @@ class _HomeShellState extends State<HomeShell> {
               child: SizedBox(
                 height: 70,
                 child: FluidNavBar(
+                  // ✅ يجبر الأنيميشن يتزامن مع _index
+                  key: ValueKey(_index),
+
+                  // ✅ عشان ما يرجع للهوم (0) بعد إعادة الإنشاء
+                  defaultIndex: _index,
+
                   icons: [
                     FluidNavBarIcon(
                       icon: Icons.home,
@@ -89,7 +97,7 @@ class _HomeShellState extends State<HomeShell> {
                       extras: const {'label': 'الملف الشخصي'},
                     ),
                   ],
-                  onChange: (i) => setState(() => _index = i),
+                  onChange: _setTab,
                   animationFactor: 1.15,
                   scaleFactor: 1.1,
                   style: const FluidNavBarStyle(
