@@ -1,15 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
+
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
 
 import 'package:geolocator/geolocator.dart';
 import 'package:Masar_application_1/services/location_service.dart';
@@ -41,9 +39,9 @@ class _AssistantTabState extends State<AssistantTab> {
   bool _uploadingImage = false;
 
   String _detectBaseUrl() {
-    if (kIsWeb) return "http://127.0.0.1:8000";
+    if (kIsWeb) return "http://10.203.225.185:8000";
     // Android emulator
-    return "http://10.0.2.2:8000";
+    return "http://10.203.225.185:8000";
   }
 
   @override
@@ -83,31 +81,38 @@ class _AssistantTabState extends State<AssistantTab> {
     _scroll.dispose();
     super.dispose();
   }
+  Future<String> _uploadImageToBackend(XFile file, {String? ticketId}) async {
+    final uri = Uri.parse("$_baseUrl/lost-found/upload-image");
 
-  Future<String> _uploadToStorageAndGetUrl(XFile file) async {
-    final uid = _passengerId ?? "anonymous";
+    final req = http.MultipartRequest("POST", uri);
 
-    final ext = p.extension(file.name);
-    final safeExt = ext.isEmpty ? ".jpg" : ext;
-    final filename = "lf_${DateTime.now().millisecondsSinceEpoch}$safeExt";
+    // الفورم اللي السيرفر ينتظره
+    req.fields["passenger_id"] = _passengerId!;
+    req.fields["session_id"] = _sessionId;
+    if (ticketId != null && ticketId.isNotEmpty) {
+      req.fields["ticket_id"] = ticketId;
+    }
 
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child("lost_found_reports")
-        .child(uid)
-        .child(_sessionId)
-        .child(filename);
+    // ملف الصورة
+    req.files.add(await http.MultipartFile.fromPath(
+      "file",
+      file.path,
+      filename: file.name,
+    ));
 
-    final Uint8List bytes = await file.readAsBytes();
-    await ref.putData(
-      bytes,
-      SettableMetadata(contentType: "image/jpeg"),
-    );
+    final streamed = await req.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamed);
 
-    return await ref.getDownloadURL();
+    if (res.statusCode != 200) {
+      throw Exception("Upload failed: ${res.statusCode} ${res.body}");
+    }
+
+    final data = jsonDecode(res.body);
+    return (data["photo_url"] ?? "").toString();
   }
 
-  Future<String> _askBackend(String text, {String? photoUrl}) async {
+
+  Future<String> _askBackend(String text) async {
     final uri = Uri.parse("$_baseUrl/ask");
 
     if (!_sessionReady || _passengerId == null) {
@@ -151,8 +156,8 @@ class _AssistantTabState extends State<AssistantTab> {
       "passenger_id": _passengerId,
       "lat": lat,
       "lon": lon,
-      "photo_url": photoUrl,
     };
+
 
     try {
       final res = await http
@@ -314,10 +319,12 @@ class _AssistantTabState extends State<AssistantTab> {
       _setTyping(true);
       _scrollDown();
 
-      final url = await _uploadToStorageAndGetUrl(picked);
+      final url = await _uploadImageToBackend(picked);
 
-      final answer = await _askBackend("تم", photoUrl: url);
-      if (!mounted) return;
+// ما نرسل photo_url داخل /ask
+// لأن السيرفر أصلاً يحطه في session_store داخل upload endpoint
+      final answer = await _askBackend("تم");
+
 
       _setTyping(false);
 

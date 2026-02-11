@@ -174,27 +174,31 @@ def handle_lost_found_flow(
     # EXPECT PHOTO ATTACHMENT (photo_url comes from app)
     if state == "lf_expect_photo":
         # لو التطبيق أرسل photo_url (بعد رفع الصورة لـ Storage)
-        if photo_url:
-            data["photo_url"] = photo_url
-            save_session(pid, session_id, "lf_station", data)
-            return (
-                "✅ تم استلام الصورة.\n\n"
-                "📍 في أي محطة فقدت الغرض؟\n\n"
-                f"{_format_options(STATION_OPTIONS)}"
-            )
+     if state == "lf_expect_photo":
+         # ✅ اقرأ الصورة من بيانات السيشن (اللي انحفظت في upload endpoint)
+         stored_url = data.get("photo_url")
 
-        # السماح للمستخدم يكمل بدون صورة
-        ans = _normalize_ar_yes_no(user_message)
-        if ans == "no":
-            data["photo_url"] = None
-            save_session(pid, session_id, "lf_station", data)
-            return (
-                "تمام ✅ كملنا بدون صورة.\n\n"
-                "📍 في أي محطة فقدت الغرض؟\n\n"
-                f"{_format_options(STATION_OPTIONS)}"
-            )
+         if stored_url:
+             save_session(pid, session_id, "lf_station", data)
+             return (
+                 "✅ تم استلام الصورة.\n\n"
+                 "📍 في أي محطة فقدت الغرض؟\n\n"
+                 f"{_format_options(STATION_OPTIONS)}"
+             )
 
-        return "بانتظار إرفاق الصورة من التطبيق... وإذا تبي تكمل بدون صورة اكتب: لا"
+         # السماح للمستخدم يكمل بدون صورة
+         ans = _normalize_ar_yes_no(user_message)
+         if ans == "no":
+             data["photo_url"] = None
+             save_session(pid, session_id, "lf_station", data)
+             return (
+                 "تمام ✅ كملنا بدون صورة.\n\n"
+                 "📍 في أي محطة فقدت الغرض؟\n\n"
+                 f"{_format_options(STATION_OPTIONS)}"
+             )
+
+         return "بانتظار إرفاق الصورة من التطبيق... وإذا تبي تكمل بدون صورة اكتب: لا"
+
 
     # STATION
     if state == "lf_station":
