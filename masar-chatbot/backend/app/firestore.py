@@ -8,38 +8,65 @@ _db = None
 _bucket = None
 
 
+def _resolve_cred_path() -> str:
+    """
+    Resolve Firebase service account credential path.
+    Priority:
+      1) FIREBASE_CRED
+      2) GOOGLE_APPLICATION_CREDENTIALS
+      3) default "serviceAccountKey.json" (project root relative)
+    """
+    cred_path = os.getenv("FIREBASE_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "serviceAccountKey.json"
+    cred_path = cred_path.strip().strip('"').strip("'")
+    return cred_path
+
+
 def get_db():
     global _db
 
-    if _db is None:
-        cred_path = os.getenv("FIREBASE_CRED", "serviceAccountKey.json")
-        cred = credentials.Certificate(cred_path)
+    if _db is not None:
+        return _db
 
-        # Initialize Firebase once
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(
-                cred,
-                {
-                    # Needed for Firebase Storage uploads
-                    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET")
-                }
-            )
+    cred_path = _resolve_cred_path()
 
-        _db = firestore.client()
+    # Fail fast with a clear error if the file is missing
+    if not os.path.exists(cred_path):
+        raise RuntimeError(
+            f"Firebase credential file not found: {cred_path}\n"
+            f"Set FIREBASE_CRED to an absolute path, e.g.\n"
+            f'  FIREBASE_CRED="C:\\\\path\\\\to\\\\serviceAccountKey.json"\n'
+            f"Or place serviceAccountKey.json in the backend working directory."
+        )
 
+    cred = credentials.Certificate(cred_path)
+
+    # Initialize Firebase once
+    if not firebase_admin._apps:
+        bucket_name = os.getenv("FIREBASE_STORAGE_BUCKET")
+        init_opts = {}
+        if bucket_name:
+            init_opts["storageBucket"] = bucket_name
+
+        firebase_admin.initialize_app(cred, init_opts)
+
+    _db = firestore.client()
     return _db
 
 
 def get_bucket():
     """
     Get Firebase Storage bucket (used for image uploads).
+    FIREBASE_STORAGE_BUCKET must be set for storage operations.
     """
     global _bucket
 
-    if _bucket is None:
-        # This uses the bucket name from initialize_app(storageBucket=...)
-        _bucket = storage.bucket()
+    if _bucket is not None:
+        return _bucket
 
+    if not os.getenv("FIREBASE_STORAGE_BUCKET"):
+        raise RuntimeError("FIREBASE_STORAGE_BUCKET is not set. Storage uploads will fail.")
+
+    _bucket = storage.bucket()
     return _bucket
 
 
@@ -56,46 +83,38 @@ def fetch_all_faq():
             "answer": data.get("answer", ""),
             "category": data.get("category", ""),
         })
-
     return items
 
 
-# Lost & Found Sessions (conversation state)
-
 def get_session(session_id: str):
-    # Get the current session state for this user
     db = get_db()
     doc = db.collection("lf_sessions").document(session_id).get()
 
     if not doc.exists:
-        # If no session exists yet, start from the main menu
         return {"state": "menu", "data": {}, "updated_at": None}
 
-    return doc.to_dict()
+    return doc.to_dict() or {"state": "menu", "data": {}, "updated_at": None}
 
 
 def save_session(session_id: str, state: str, data: dict):
-    # Save or update the user's current conversation state
     db = get_db()
-    db.collection("lf_sessions").document(session_id).set({
-        "state": state,
-        "data": data,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }, merge=True)
+    db.collection("lf_sessions").document(session_id).set(
+        {
+            "state": state,
+            "data": data,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        },
+        merge=True
+    )
 
 
-# =========================
-# Save Lost & Found Reports
-# =========================
 def save_lost_found_report(report: dict):
-    # Store the final lost item report using ticket_id as the document ID
     db = get_db()
     ticket_id = report["ticket_id"]
     db.collection("lost_found_reports").document(ticket_id).set(report)
 
 
 def get_lost_found_report(ticket_id: str):
-    # Fetch a lost item report using its ticket number
     db = get_db()
     doc = db.collection("lost_found_reports").document(ticket_id).get()
 

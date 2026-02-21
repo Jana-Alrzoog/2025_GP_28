@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -38,10 +38,12 @@ class _AssistantTabState extends State<AssistantTab> {
   final ImagePicker _picker = ImagePicker();
   bool _uploadingImage = false;
 
+  bool _sending = false;
+
+  // Detect base URL for backend (port 8000)
   String _detectBaseUrl() {
-    if (kIsWeb) return "http://10.203.225.185:8000";
-    // Android emulator
-    return "http://10.203.225.185:8000";
+    if (kIsWeb) return "http://localhost:8000";
+    return "http://10.0.2.2:8000";
   }
 
   @override
@@ -81,19 +83,18 @@ class _AssistantTabState extends State<AssistantTab> {
     _scroll.dispose();
     super.dispose();
   }
+
   Future<String> _uploadImageToBackend(XFile file, {String? ticketId}) async {
     final uri = Uri.parse("$_baseUrl/lost-found/upload-image");
-
     final req = http.MultipartRequest("POST", uri);
 
-    // الفورم اللي السيرفر ينتظره
     req.fields["passenger_id"] = _passengerId!;
     req.fields["session_id"] = _sessionId;
+
     if (ticketId != null && ticketId.isNotEmpty) {
       req.fields["ticket_id"] = ticketId;
     }
 
-    // ملف الصورة
     req.files.add(await http.MultipartFile.fromPath(
       "file",
       file.path,
@@ -110,7 +111,6 @@ class _AssistantTabState extends State<AssistantTab> {
     final data = jsonDecode(res.body);
     return (data["photo_url"] ?? "").toString();
   }
-
 
   Future<String> _askBackend(String text) async {
     final uri = Uri.parse("$_baseUrl/ask");
@@ -158,7 +158,6 @@ class _AssistantTabState extends State<AssistantTab> {
       "lon": lon,
     };
 
-
     try {
       final res = await http
           .post(
@@ -169,7 +168,7 @@ class _AssistantTabState extends State<AssistantTab> {
           .timeout(const Duration(seconds: 20));
 
       if (res.statusCode != 200) {
-        return "Server error: ${res.statusCode}";
+        return "Server error: ${res.statusCode}\n${res.body}";
       }
 
       final data = jsonDecode(res.body);
@@ -179,7 +178,7 @@ class _AssistantTabState extends State<AssistantTab> {
           "Check:\n"
           "- backend running on port 8000\n"
           "- baseUrl = $_baseUrl\n"
-          "- same Wi-Fi if using a real phone";
+          "- Using Android emulator => 10.0.2.2\n";
     }
   }
 
@@ -201,11 +200,17 @@ class _AssistantTabState extends State<AssistantTab> {
 
     _setTyping(false);
 
+    final parsed = _parseBotReply(answer);
     setState(() {
-      _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
+      _msgs.add(_Msg(
+        text: parsed.cleanedText.isEmpty
+            ? (answer.isEmpty ? "Empty reply" : answer)
+            : parsed.cleanedText,
+        fromBot: true,
+      ));
     });
 
-    _extractOptionsFromBot(answer);
+    _applyOptions(parsed.options);
     _scrollDown();
     _loadingMenu = false;
   }
@@ -213,20 +218,26 @@ class _AssistantTabState extends State<AssistantTab> {
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
+      if (!mounted) return;
       _scroll.animateTo(
-        _scroll.position.maxScrollExtent + 160,
+        _scroll.position.maxScrollExtent + 260,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
     });
   }
 
-  void _extractOptionsFromBot(String botText) {
+  // Parse bot reply:
+  // - Extract numbered options from lines like "1️⃣ label" or "1 - label"
+  // - Remove those option lines from the chat bubble (keeps bubble clean)
+  _ParsedBotReply _parseBotReply(String botText) {
     final lines = botText.split('\n');
     final options = <_OptionItem>[];
+    final keptLines = <String>[];
 
-    for (final l in lines) {
-      final line = l.trim();
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
 
       final matchEmoji = RegExp(r'^(\d+)️⃣\s+(.+)$').firstMatch(line);
       if (matchEmoji != null) {
@@ -245,8 +256,15 @@ class _AssistantTabState extends State<AssistantTab> {
         ));
         continue;
       }
+
+      keptLines.add(line);
     }
 
+    final cleaned = keptLines.join('\n').trim();
+    return _ParsedBotReply(cleanedText: cleaned, options: options);
+  }
+
+  void _applyOptions(List<_OptionItem> options) {
     setState(() {
       _lastOptions = options;
       _hasOptions = options.isNotEmpty;
@@ -264,10 +282,13 @@ class _AssistantTabState extends State<AssistantTab> {
   }
 
   Future<void> _send([String? forcedText]) async {
+    if (_sending) return;
+
     final txt = (forcedText ?? _controller.text).trim();
     if (txt.isEmpty) return;
 
     setState(() {
+      _sending = true;
       _msgs.add(_Msg(text: txt, fromBot: false));
       if (forcedText == null) _controller.clear();
       _hasOptions = false;
@@ -283,16 +304,61 @@ class _AssistantTabState extends State<AssistantTab> {
 
     _setTyping(false);
 
+    final parsed = _parseBotReply(answer);
     setState(() {
-      _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
+      _msgs.add(_Msg(
+        text: parsed.cleanedText.isEmpty
+            ? (answer.isEmpty ? "Empty reply" : answer)
+            : parsed.cleanedText,
+        fromBot: true,
+      ));
+      _sending = false;
     });
 
-    _extractOptionsFromBot(answer);
+    _applyOptions(parsed.options);
+    _scrollDown();
+  }
+
+  // Send option as plain number (best with your backend flows)
+  Future<void> _sendOption(_OptionItem opt) async {
+    if (_sending) return;
+
+    final display = opt.label.trim();
+    final backend = opt.index.toString();
+
+    setState(() {
+      _sending = true;
+      _msgs.add(_Msg(text: display, fromBot: false));
+      _hasOptions = false;
+      _lastOptions = [];
+    });
+
+    _scrollDown();
+    _setTyping(true);
+    _scrollDown();
+
+    final answer = await _askBackend(backend);
+    if (!mounted) return;
+
+    _setTyping(false);
+
+    final parsed = _parseBotReply(answer);
+    setState(() {
+      _msgs.add(_Msg(
+        text: parsed.cleanedText.isEmpty
+            ? (answer.isEmpty ? "Empty reply" : answer)
+            : parsed.cleanedText,
+        fromBot: true,
+      ));
+      _sending = false;
+    });
+
+    _applyOptions(parsed.options);
     _scrollDown();
   }
 
   Future<void> _attachAndSendImage() async {
-    if (_uploadingImage) return;
+    if (_uploadingImage || _sending) return;
 
     if (!_sessionReady || _passengerId == null) {
       setState(() {
@@ -308,82 +374,186 @@ class _AssistantTabState extends State<AssistantTab> {
       );
       if (picked == null) return;
 
+      final Uint8List bytes = await picked.readAsBytes();
+
       setState(() {
         _uploadingImage = true;
+        _sending = true;
         _hasOptions = false;
         _lastOptions = [];
-        _msgs.add(_Msg(text: "تم إرفاق صورة", fromBot: false));
+
+        _msgs.add(_Msg(
+          fromBot: false,
+          imageBytes: bytes,
+          text: "صورة مرفقة",
+        ));
       });
 
       _scrollDown();
       _setTyping(true);
       _scrollDown();
 
-      final url = await _uploadImageToBackend(picked);
+      await _uploadImageToBackend(picked);
 
-// ما نرسل photo_url داخل /ask
-// لأن السيرفر أصلاً يحطه في session_store داخل upload endpoint
       final answer = await _askBackend("تم");
-
+      if (!mounted) return;
 
       _setTyping(false);
 
+      final parsed = _parseBotReply(answer);
       setState(() {
         _uploadingImage = false;
-        _msgs.add(_Msg(text: answer.isEmpty ? "Empty reply" : answer, fromBot: true));
+        _sending = false;
+        _msgs.add(_Msg(
+          text: parsed.cleanedText.isEmpty
+              ? (answer.isEmpty ? "Empty reply" : answer)
+              : parsed.cleanedText,
+          fromBot: true,
+        ));
       });
 
-      _extractOptionsFromBot(answer);
+      _applyOptions(parsed.options);
       _scrollDown();
     } catch (_) {
       if (!mounted) return;
       _setTyping(false);
       setState(() {
         _uploadingImage = false;
+        _sending = false;
         _msgs.add(_Msg(text: "صار خطأ في رفع الصورة. جرّب مرة ثانية.", fromBot: true));
       });
       _scrollDown();
     }
   }
 
+  IconData _iconForOptionText(String label) {
+    final t = label.toLowerCase();
+
+    if (t.contains("الإبلاغ") || t.contains("بلاغ") || t.contains("مفقود") || t.contains("lost")) {
+      return Icons.report_gmailerrorred_outlined;
+    }
+
+    if (t.contains("الأسئلة") || t.contains("اسئلة") || t.contains("عام") || t.contains("help")) {
+      return Icons.help_outline_rounded;
+    }
+
+    if (t.contains("مواعيد") || t.contains("الجدول") || t.contains("trip") || t.contains("schedule")) {
+      return Icons.schedule_rounded;
+    }
+
+    // Route planning: do not match the app name "مسار" by itself.
+    final isRoute =
+        t.contains("تخطيط") ||
+        t.contains("طريق") ||
+        t.contains("وجهة") ||
+        t.contains("إلى") ||
+        t.contains("الى") ||
+        t.contains("route") ||
+        t.contains("directions");
+    if (isRoute) {
+      return Icons.alt_route_rounded;
+    }
+
+    if (t.contains("محطة") || t.contains("مترو") || t.contains("كافد")) {
+      return Icons.train_outlined;
+    }
+
+    if (t.contains("اليوم") || t.contains("أمس") || t.contains("صباح") || t.contains("مساء")) {
+      return Icons.access_time_rounded;
+    }
+
+    return Icons.arrow_forward_ios_rounded;
+  }
+
   Widget _buildOptionButtons() {
     if (!_hasOptions || _lastOptions.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: _lastOptions.map((opt) {
-          return ElevatedButton(
-            onPressed: () => _send(opt.index.toString()),
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: const Color(0xFFF1F1F1),
-              foregroundColor: Colors.black87,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.black.withOpacity(.08)),
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.grid_view_rounded, size: 18, color: Color(0xFF5B3FCB)),
+              const SizedBox(width: 8),
+              const Text(
+                "الخيارات",
+                textDirection: TextDirection.rtl,
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
-            ),
-            child: Text(opt.label, textDirection: TextDirection.rtl),
-          );
-        }).toList(),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                ),
+                child: Text(
+                  "${_lastOptions.length}",
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _lastOptions.map((opt) {
+              final icon = _iconForOptionText(opt.label);
+              return InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: _sending ? null : () => _sendOption(opt),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _sending ? Colors.white.withOpacity(0.6) : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.black.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 18, color: const Color(0xFF2F2F2F)),
+                      const SizedBox(width: 8),
+                      Text(
+                        opt.label,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: _sending ? Colors.black38 : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
 
-  // NEW: input bar height constants (so list padding matches perfectly)
   static const double _inputBarH = 58;
-
-  //  CHANGED: closer to bottom bar
   static const double _gapAboveNav = 4;
-
-  //  CHANGED: smaller => input goes LOWER
   static const double bottomNavTotalHeight = 72;
 
-  // WhatsApp-like input bar.
   Widget _buildInputBar(BuildContext context) {
     return Material(
       color: Colors.transparent,
@@ -402,35 +572,35 @@ class _AssistantTabState extends State<AssistantTab> {
                     controller: _controller,
                     textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
-                    enabled: !_uploadingImage,
+                    enabled: !_uploadingImage && !_sending,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
-                      hintText: _uploadingImage ? 'جاري رفع الصورة…' : 'اكتب رسالتك…',
+                      hintText: _uploadingImage
+                          ? 'جاري رفع الصورة…'
+                          : (_sending ? 'جاري الإرسال…' : 'اكتب رسالتك…'),
                       filled: true,
                       fillColor: const Color(0xFFF5F5F5),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
                       ),
-                      // clearer circular gallery button (lighter color)
                       suffixIcon: Padding(
                         padding: const EdgeInsets.only(right: 10),
                         child: Material(
-                          color: const Color(0xFFE6E6E6), // lighter
+                          color: const Color(0xFFE6E6E6),
                           elevation: 1,
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
-                            onTap: _uploadingImage ? null : _attachAndSendImage,
+                            onTap: (_uploadingImage || _sending) ? null : _attachAndSendImage,
                             child: Padding(
                               padding: const EdgeInsets.all(10),
                               child: Icon(
-                                Icons.photo_outlined, // gallery icon (NOT camera)
+                                Icons.photo_outlined,
                                 size: 20,
-                                color: _uploadingImage
+                                color: (_uploadingImage || _sending)
                                     ? Colors.black26
                                     : const Color(0xFF3A3A3A),
                               ),
@@ -452,7 +622,7 @@ class _AssistantTabState extends State<AssistantTab> {
                 borderRadius: BorderRadius.circular(23),
               ),
               child: IconButton(
-                onPressed: _uploadingImage ? null : _send,
+                onPressed: (_uploadingImage || _sending) ? null : _send,
                 icon: const Icon(Icons.send, color: Colors.white, size: 20),
                 tooltip: "Send",
               ),
@@ -510,16 +680,169 @@ class _OptionItem {
   _OptionItem({required this.index, required this.label});
 }
 
+class _ParsedBotReply {
+  final String cleanedText;
+  final List<_OptionItem> options;
+  _ParsedBotReply({required this.cleanedText, required this.options});
+}
+
 class _Msg {
-  final String text;
+  final String? text;
   final bool fromBot;
   final bool isTyping;
-  _Msg({required this.text, required this.fromBot, this.isTyping = false});
+  final Uint8List? imageBytes;
+
+  _Msg({
+    this.text,
+    required this.fromBot,
+    this.isTyping = false,
+    this.imageBytes,
+  });
+}
+
+/*
+  Tag icon support:
+  Extracts a tag only if it exists at the start of the bot message.
+  Example: "[LF_COLOR]\n2) ..." -> tag = LF_COLOR, cleanText = "2) ..."
+*/
+class _TagParts {
+  final String? tag;
+  final String clean;
+  _TagParts({required this.tag, required this.clean});
+}
+
+_TagParts _extractTagFromStart(String text) {
+  final t = text.trimLeft();
+  final m = RegExp(r'^\[([A-Z0-9_]+)\]\s*').firstMatch(t);
+  if (m == null) return _TagParts(tag: null, clean: text.trim());
+  final tag = m.group(1);
+  final clean = t.substring(m.end).trim();
+  return _TagParts(tag: tag, clean: clean);
+}
+
+IconData _iconFromTag(String? tag) {
+  switch (tag) {
+    case "LF_START":
+      return Icons.assignment_rounded;
+    case "LF_ITEM":
+      return Icons.inventory_2_rounded;
+    case "LF_COLOR":
+      return Icons.color_lens_rounded;
+    case "LF_BRAND":
+      return Icons.sell_rounded;
+    case "LF_DESC":
+      return Icons.notes_rounded;
+    case "LF_PHOTO":
+      return Icons.photo_camera_rounded;
+    case "LF_STATION":
+      return Icons.location_on_rounded;
+    case "LF_TIME":
+      return Icons.schedule_rounded;
+    case "LF_DATE":
+      return Icons.event_rounded;
+    case "LF_CONTACT":
+      return Icons.person_rounded;
+    case "LF_DONE":
+      return Icons.check_circle_rounded;
+    case "LF_ERROR":
+      return Icons.error_outline_rounded;
+    default:
+      return Icons.smart_toy_outlined;
+  }
+}
+
+Color _colorFromTag(String? tag) {
+  switch (tag) {
+    case "LF_START":
+      return const Color(0xFF5B3FCB);
+    case "LF_ITEM":
+    case "LF_COLOR":
+    case "LF_BRAND":
+    case "LF_DESC":
+      return const Color(0xFF1976D2);
+    case "LF_PHOTO":
+      return const Color(0xFF6A1B9A);
+    case "LF_STATION":
+    case "LF_TIME":
+    case "LF_DATE":
+      return const Color(0xFF2E7D32);
+    case "LF_CONTACT":
+      return const Color(0xFF00897B);
+    case "LF_DONE":
+      return const Color(0xFF2E7D32);
+    case "LF_ERROR":
+      return const Color(0xFFD32F2F);
+    default:
+      return Colors.black54;
+  }
+}
+
+Color _fallbackColorForText(String t) {
+  final s = t.toLowerCase();
+  if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) {
+    return const Color(0xFFD32F2F);
+  }
+  if (s.contains("تذكرة") || s.contains("نجاح")) {
+    return const Color(0xFF2E7D32);
+  }
+  if (s.contains("محطة") || s.contains("وقت") || s.contains("تاريخ")) {
+    return const Color(0xFF1976D2);
+  }
+  return Colors.black54;
+}
+
+/*
+  Smart override:
+  If tag is wrong but text clearly indicates a step, use the matching icon.
+*/
+IconData _iconFromTagSmart(String? tag, String cleanText) {
+  if (tag == "LF_DONE" || tag == "LF_ERROR" || tag == "LF_START") {
+    return _iconFromTag(tag);
+  }
+
+  final s = cleanText.toLowerCase();
+
+  if (s.contains("لون")) return Icons.color_lens_rounded;
+  if (s.contains("الماركة") || s.contains("الموديل")) return Icons.sell_rounded;
+  if (s.contains("تفاصيل") || s.contains("علامة مميزة") || s.contains("علامه مميزه")) {
+    return Icons.notes_rounded;
+  }
+  if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) {
+    return Icons.photo_camera_rounded;
+  }
+  if (s.contains("محطة") || s.contains("محطه")) return Icons.location_on_rounded;
+
+  // Time/date detection: if it mentions date OR time OR "when"
+  if (s.contains("متى") || s.contains("وقت") || s.contains("تاريخ")) {
+    if (s.contains("تاريخ") || RegExp(r'\d{4}-\d{2}-\d{2}').hasMatch(s)) {
+      return Icons.event_rounded;
+    }
+    return Icons.schedule_rounded;
+  }
+
+  if (s.contains("اسم") || s.contains("جوال") || s.contains("رقم")) {
+    return Icons.person_rounded;
+  }
+
+  return _iconFromTag(tag);
 }
 
 class _ChatBubble extends StatelessWidget {
   final _Msg msg;
   const _ChatBubble({required this.msg});
+
+  IconData _fallbackBotIconForText(String t) {
+    final s = t.toLowerCase();
+
+    if (s.contains("بلاغ") || s.contains("مفقود")) return Icons.report_problem_outlined;
+    if (s.contains("محطة") || s.contains("محطات")) return Icons.train_outlined;
+    if (s.contains("وقت") || s.contains("متى") || s.contains("تاريخ")) return Icons.schedule_outlined;
+    if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) return Icons.photo_camera_outlined;
+    if (s.contains("رقم التذكرة") || s.contains("تذكرة")) return Icons.confirmation_number_outlined;
+    if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) return Icons.error_outline;
+
+    return Icons.smart_toy_outlined;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -527,6 +850,21 @@ class _ChatBubble extends StatelessWidget {
     final bg = isBot ? const Color(0xFFEDE7F6) : const Color(0xFFE8F5E9);
     final fg = Colors.black87;
     final align = isBot ? CrossAxisAlignment.start : CrossAxisAlignment.end;
+
+    final rawText = (msg.text ?? "").trim();
+
+    final parts =
+        isBot ? _extractTagFromStart(rawText) : _TagParts(tag: null, clean: rawText);
+    final tag = parts.tag;
+    final cleanText = parts.clean;
+
+    final botIcon = isBot
+        ? (tag != null ? _iconFromTagSmart(tag, cleanText) : _fallbackBotIconForText(cleanText))
+        : null;
+
+    final iconColor = isBot
+        ? (tag != null ? _colorFromTag(tag) : _fallbackColorForText(cleanText))
+        : null;
 
     return Column(
       crossAxisAlignment: align,
@@ -553,10 +891,59 @@ class _ChatBubble extends StatelessWidget {
               )
             ],
           ),
-          child: Text(
-            msg.text,
-            textDirection: TextDirection.rtl,
-            style: TextStyle(color: fg, height: 1.4),
+          child: Column(
+            crossAxisAlignment: align,
+            children: [
+              if (msg.imageBytes != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    msg.imageBytes!,
+                    fit: BoxFit.cover,
+                    height: 180,
+                    width: double.infinity,
+                  ),
+                ),
+                if (cleanText.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isBot) ...[
+                        Icon(botIcon, size: 18, color: iconColor),
+                        const SizedBox(width: 8),
+                      ],
+                      Flexible(
+                        child: Text(
+                          cleanText,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(color: fg, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ] else ...[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isBot) ...[
+                      Icon(botIcon, size: 18, color: iconColor),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Text(
+                        cleanText,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(color: fg, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
       ],
