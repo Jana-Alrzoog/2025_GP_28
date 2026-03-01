@@ -1,13 +1,21 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime, timezone
+from dotenv import load_dotenv
 import os
+load_dotenv()
 import json
 import math
 import heapq
+import re
 
 from app.firestore import fetch_all_faq
+from app.places_service import geocode_place
 from app.llm_client import ask_llm
+
+# NEW (route walking/driving)
+from app.distance_service import get_walk_drive
 
 # Lost & Found
 from app.lost_found_flow import handle_lost_found_flow
@@ -16,7 +24,7 @@ from app.session_store import get_session, save_session, reset_session
 # Image upload
 from app.upload import upload_lost_found_image
 
-# Schedule (Firestore trips)
+# Schedule (Firestore trips)  ✅ (kept, but schedule_flow will not rely on it)
 from app.trips_store import fetch_trips_for_station_today
 
 app = FastAPI()
@@ -25,6 +33,10 @@ app = FastAPI()
 # Config
 # ----------------------------
 METRO_STATIONS_PATH = os.getenv("METRO_STATIONS_PATH", "app/data/metro_stations.json")
+
+# Station map (aliases + ordered default station suggestions)
+STATION_ID_MAP_PATH = os.getenv("STATION_ID_MAP_PATH", "app/data/station_id_map.json")
+STATION_DEFAULT_ORDER = ["S1", "S2", "S3", "S4", "S5", "S6"]
 
 TRAIN_SPEED_KMH = float(os.getenv("TRAIN_SPEED_KMH", "35"))
 DWELL_MIN = float(os.getenv("DWELL_MIN", "0.5"))          # minutes
@@ -38,7 +50,27 @@ DEST_OPTIONS_COUNT = int(os.getenv("DEST_OPTIONS_COUNT", "6"))
 STATION_OPTIONS_COUNT = int(os.getenv("STATION_OPTIONS_COUNT", "6"))
 
 GENERAL_STATE = "general_qa"
-SCHEDULE_STATE = "sch_wait_station"
+
+# Schedule states (clean)
+SCH_CHOOSE_STATION = "sch_choose_station"
+SCH_SHOWING_TRIPS = "sch_showing_trips"
+
+# Route states (NEW)
+RT_ASK_DEST = "rt_ask_dest"
+RT_SHOWING = "rt_showing"
+
+# ----------------------------
+# Route UI meta (icons/colors)
+# (عدّلي مسميات الايقونات حسب Flutter assets)
+# ----------------------------
+LINE_META = {
+    "Line1": {"name_ar": "المسار الأزرق",    "color": "#0077C8", "icon": "line_blue"},
+    "Line2": {"name_ar": "المسار الأحمر",    "color": "#E10600", "icon": "line_red"},
+    "Line3": {"name_ar": "المسار البرتقالي", "color": "#F57C00", "icon": "line_orange"},
+    "Line4": {"name_ar": "المسار الأصفر",    "color": "#FBC02D", "icon": "line_yellow"},
+    "Line5": {"name_ar": "المسار الأخضر",    "color": "#2E7D32", "icon": "line_green"},
+    "Line6": {"name_ar": "المسار البنفسجي",  "color": "#6A1B9A", "icon": "line_purple"},
+}
 
 # ----------------------------
 # Request model
@@ -100,7 +132,7 @@ def _menu_choice_from_text(question: str) -> Optional[str]:
     if "تخطيط" in q or "route" in q or "اتجاه" in q or "كيف اروح" in q:
         return "4"
 
-    # Also allow "من ... الى ..." as a strong signal
+    # Also allow "from ... to ..." as a strong signal
     if ("من " in q and " الى " in q) or ("من " in q and "إلى " in question):
         return "4"
 
@@ -140,7 +172,39 @@ def menu_response():
 
 
 # ----------------------------
-# Stations loading + helpers
+# Station map (aliases + ordered defaults) for ROUTE + SEARCH
+# ----------------------------
+_STATION_ID_MAP: Optional[Dict[str, str]] = None
+
+
+def _load_station_id_map() -> Dict[str, str]:
+    global _STATION_ID_MAP
+    if _STATION_ID_MAP is not None:
+        return _STATION_ID_MAP
+
+    if not os.path.exists(STATION_ID_MAP_PATH):
+        _STATION_ID_MAP = {}
+        return _STATION_ID_MAP
+
+    with open(STATION_ID_MAP_PATH, "r", encoding="utf-8") as f:
+        _STATION_ID_MAP = json.load(f) or {}
+
+    return _STATION_ID_MAP
+
+
+def _aliases_from_map_value(raw: str) -> List[str]:
+    """
+    station_id_map.json uses "/" to separate aliases.
+    Example:
+      "المركز المالي/KAFD"
+    """
+    if not raw:
+        return []
+    return [p.strip() for p in str(raw).split("/") if p.strip()]
+
+
+# ----------------------------
+# Stations loading + helpers (for ROUTE / nearest / graph)
 # ----------------------------
 _STATIONS_CACHE: Optional[List[Dict[str, Any]]] = None
 _GRAPH_CACHE: Optional[Dict[str, Any]] = None
@@ -151,7 +215,7 @@ def _safe_float(x) -> Optional[float]:
         if x is None:
             return None
         return float(x)
-    except:
+    except Exception:
         return None
 
 
@@ -174,14 +238,95 @@ def _time_minutes_for_segment(lat1, lon1, lat2, lon2) -> float:
     return max(t, MIN_SEGMENT_MIN)
 
 
+def _station_display(s: Dict[str, Any]) -> str:
+    name = s.get("name_ar") or s.get("name_en") or s.get("code")
+    return str(name).strip() or s.get("code", "")
+
+
+def _find_station_by_text(
+    text: str,
+    stations: List[Dict[str, Any]],
+    *,
+    use_map_aliases: bool = True
+) -> Optional[Dict[str, Any]]:
+    """
+    Match against multiple keys: ar/en/code (+ map aliases if enabled).
+    Supports:
+    - exact key match
+    - contains match
+    """
+    q = _norm_ar(text)
+    if not q:
+        return None
+
+    if use_map_aliases:
+        m = _load_station_id_map()
+        if m:
+            for _, raw in m.items():
+                aliases = _aliases_from_map_value(raw)
+                if not aliases:
+                    continue
+                for a in aliases:
+                    if _norm_ar(a) == q:
+                        candidate_code = aliases[-1]
+                        if candidate_code and (" " not in candidate_code):
+                            for s in stations:
+                                if s.get("id") == candidate_code:
+                                    return s
+                        break
+
+    # Exact match
+    for s in stations:
+        keys = s.get("keys") or []
+        if q in keys:
+            return s
+
+    # Contains match
+    for s in stations:
+        keys = s.get("keys") or []
+        for k in keys:
+            if q in k:
+                return s
+
+    return None
+
+
+def _augment_station_keys_with_map_aliases(stations: List[Dict[str, Any]]) -> None:
+    m = _load_station_id_map()
+    if not m:
+        return
+
+    by_id = {s.get("id"): s for s in stations if s.get("id")}
+
+    for _, raw in m.items():
+        aliases = _aliases_from_map_value(raw)
+        if not aliases:
+            continue
+
+        candidate_code = aliases[-1]
+        target = None
+        if candidate_code and (" " not in candidate_code) and (candidate_code in by_id):
+            target = by_id[candidate_code]
+
+        if target is None:
+            for a in aliases:
+                found = _find_station_by_text(a, stations, use_map_aliases=False)
+                if found:
+                    target = found
+                    break
+
+        if target is None:
+            continue
+
+        keys = target.get("keys") or []
+        for a in aliases:
+            na = _norm_ar(a)
+            if na and na not in keys:
+                keys.append(na)
+        target["keys"] = list(dict.fromkeys(keys))
+
+
 def _load_stations() -> List[Dict[str, Any]]:
-    """
-    Loads stations and builds multi-keys so users can search by:
-    - Arabic name
-    - English name
-    - Station code
-    (fixes 'kafd' case)
-    """
     global _STATIONS_CACHE
     if _STATIONS_CACHE is not None:
         return _STATIONS_CACHE
@@ -210,7 +355,7 @@ def _load_stations() -> List[Dict[str, Any]]:
         seq = it.get("stationseq")
         try:
             seq = int(seq) if seq is not None else None
-        except:
+        except Exception:
             seq = None
 
         gp = it.get("geo_point_2d") or {}
@@ -220,15 +365,12 @@ def _load_stations() -> List[Dict[str, Any]]:
         if not code or lat is None or lon is None:
             continue
 
-        # Build multiple normalized keys
         keys = []
         if ar:
             keys.append(_norm_ar(ar))
         if en:
             keys.append(_norm_ar(en))
-        keys.append(_norm_ar(code))  # always allow station code search
-
-        # Remove empties + duplicates
+        keys.append(_norm_ar(code))
         keys = [k for k in keys if k]
         keys = list(dict.fromkeys(keys))
 
@@ -237,12 +379,14 @@ def _load_stations() -> List[Dict[str, Any]]:
             "code": code,
             "name_ar": ar or en or code,
             "name_en": en or ar or code,
-            "keys": keys,                # ✅ NEW
+            "keys": keys,
             "line": line,
             "seq": seq,
             "lat": lat,
             "lon": lon,
         })
+
+    _augment_station_keys_with_map_aliases(stations)
 
     _STATIONS_CACHE = stations
     return stations
@@ -259,85 +403,8 @@ def _find_nearest_station(lat: float, lon: float, stations: List[Dict[str, Any]]
     return best
 
 
-def _station_display(s: Dict[str, Any]) -> str:
-    name = s.get("name_ar") or s.get("name_en") or s.get("code")
-    return str(name).strip() or s.get("code", "")
-
-
-def _find_station_by_text(text: str, stations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """
-    Match against multiple keys: ar/en/code.
-    Supports:
-    - exact key match
-    - contains match
-    """
-    q = _norm_ar(text)
-    if not q:
-        return None
-
-    # exact match
-    for s in stations:
-        keys = s.get("keys") or []
-        if q in keys:
-            return s
-
-    # contains match (fallback)
-    for s in stations:
-        keys = s.get("keys") or []
-        for k in keys:
-            if q in k:
-                return s
-
-    return None
-
-
-def _station_suggestions(stations: List[Dict[str, Any]], query: Optional[str] = None, limit: int = 6) -> List[Dict[str, str]]:
-    """
-    Returns station options as:
-      [{"id": "<code>", "label": "<arabic name>"}]
-    If query is given, returns best matches.
-    """
-    if query:
-        q = _norm_ar(query)
-        scored = []
-        for s in stations:
-            keys = s.get("keys") or []
-            # score: exact > startswith > contains
-            score = 0
-            for k in keys:
-                if k == q:
-                    score = max(score, 100)
-                elif k.startswith(q):
-                    score = max(score, 60)
-                elif q in k:
-                    score = max(score, 30)
-            if score > 0:
-                scored.append((score, s))
-        scored.sort(key=lambda x: (-x[0], x[1].get("line", ""), x[1].get("seq") is None, x[1].get("seq") or 10**9))
-        picks = [s for _, s in scored[:limit]]
-    else:
-        # default: stable, nice ordering
-        arr = sorted(stations, key=lambda s: (s.get("line", ""), s.get("seq") is None, s.get("seq") or 10**9))
-        picks = arr[:limit]
-
-    return [{"id": s["id"], "label": _station_display(s)} for s in picks]
-
-
-def _schedule_prompt_response(stations: List[Dict[str, Any]], hint: Optional[str] = None):
-    text = "تم. ارسلي اسم المحطة لعرض مواعيد الرحلات."
-    if hint:
-        text = hint + "\n" + text
-    return {
-        "matched_faq_id": None,
-        "answer": text,
-        "confidence": 1.0,
-        "type": "stations",
-        "options": _station_suggestions(stations, query=None, limit=STATION_OPTIONS_COUNT)
-    }
-
-
 # ----------------------------
-# Build graph + Dijkstra
+# Build graph + Dijkstra (ROUTE)
 # ----------------------------
 def _build_graph() -> Dict[str, Any]:
     global _GRAPH_CACHE
@@ -440,132 +507,472 @@ def _dijkstra(adj: Dict[str, List[Tuple[str, float]]], start: str, goal: str):
     return path, dist[goal]
 
 
-def _make_destination_options(start_station_id: str, user_lat: float, user_lon: float, stations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    arr = []
-    for s in stations:
-        if s["id"] == start_station_id:
+# ----------------------------
+# Route helpers (NEW)
+# ----------------------------
+def _line_meta(line_id: str) -> Dict[str, Any]:
+    return LINE_META.get(line_id, {"name_ar": line_id or "المسار", "color": None, "icon": None})
+
+
+def _make_route_steps(path_ids: List[str], by_id: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Produces UI-friendly steps:
+      - ride on a line from station A to B (N stops)
+      - transfer (if line changes)
+    """
+    if not path_ids or len(path_ids) < 2:
+        return []
+
+    steps: List[Dict[str, Any]] = []
+
+    def station_name(sid: str) -> str:
+        return _station_display(by_id[sid])
+
+    cur_line = by_id[path_ids[0]].get("line")
+    seg_start = path_ids[0]
+    stops = 0
+
+    for i in range(1, len(path_ids)):
+        prev_sid = path_ids[i - 1]
+        sid = path_ids[i]
+        prev_line = by_id[prev_sid].get("line")
+        this_line = by_id[sid].get("line")
+
+        # Same line => keep riding
+        if this_line == prev_line:
+            stops += 1
             continue
-        d = _haversine_km(user_lat, user_lon, s["lat"], s["lon"])
-        arr.append((d, s))
-    arr.sort(key=lambda x: x[0])
-    return [s for _, s in arr[:DEST_OPTIONS_COUNT]]
+
+        # Line changed at sid => close previous ride segment
+        if prev_line:
+            meta = _line_meta(prev_line)
+            steps.append({
+                "type": "ride",
+                "line_id": prev_line,
+                "line_name": meta.get("name_ar"),
+                "line_color": meta.get("color"),
+                "line_icon": meta.get("icon"),
+                "from": station_name(seg_start),
+                "to": station_name(prev_sid),
+                "stops": max(1, stops),
+            })
+
+        # Transfer step
+        if this_line:
+            meta_to = _line_meta(this_line)
+            steps.append({
+                "type": "transfer",
+                "at": station_name(prev_sid),
+                "to_line_id": this_line,
+                "to_line_name": meta_to.get("name_ar"),
+                "to_line_color": meta_to.get("color"),
+                "to_line_icon": meta_to.get("icon"),
+                "minutes": int(round(TRANSFER_MIN)),
+            })
+
+        # Start new segment from prev_sid (transfer station) to next stations
+        seg_start = prev_sid
+        cur_line = this_line
+        stops = 1  # we already moved one edge into the new line
+
+    # close last segment
+    last_line = by_id[path_ids[-1]].get("line")
+    if last_line:
+        meta_last = _line_meta(last_line)
+        steps.append({
+            "type": "ride",
+            "line_id": last_line,
+            "line_name": meta_last.get("name_ar"),
+            "line_color": meta_last.get("color"),
+            "line_icon": meta_last.get("icon"),
+            "from": station_name(seg_start),
+            "to": station_name(path_ids[-1]),
+            "stops": max(1, stops),
+        })
+
+    return steps
+
+
+def _route_card_response(
+    *,
+    title: str,
+    start_station: Dict[str, Any],
+    end_station: Dict[str, Any],
+    dest_label: str,
+    metro_min: int,
+    walk_to_start: Optional[int],
+    drive_to_start: Optional[int],
+    walk_from_end: Optional[int],
+    drive_from_end: Optional[int],
+    steps: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Flutter-friendly payload (cards/icons)
+    """
+    return {
+        "matched_faq_id": None,
+        "answer": title,
+        "confidence": 1.0,
+        "type": "route_card",
+        "route": {
+            "destination_label": dest_label,
+            "start_station": {
+                "id": start_station.get("id"),
+                "name": _station_display(start_station),
+                "line_id": start_station.get("line"),
+                "line_meta": _line_meta(start_station.get("line")),
+                "lat": start_station.get("lat"),
+                "lon": start_station.get("lon"),
+            },
+            "end_station": {
+                "id": end_station.get("id"),
+                "name": _station_display(end_station),
+                "line_id": end_station.get("line"),
+                "line_meta": _line_meta(end_station.get("line")),
+                "lat": end_station.get("lat"),
+                "lon": end_station.get("lon"),
+            },
+            "times": {
+                "metro_min": metro_min,
+                "walk_to_start_min": walk_to_start,
+                "drive_to_start_min": drive_to_start,
+                "walk_from_end_min": walk_from_end,
+                "drive_from_end_min": drive_from_end,
+            },
+            "steps": steps,
+        },
+        "options": [
+            {"id": "1", "label": "تغيير الوجهة"},
+            {"id": "2", "label": "رجوع للقائمة"},
+        ],
+    }
 
 
 # ----------------------------
-# Route flow (rt_*)
+# Route flow (rt_*) REPLACED
 # ----------------------------
-def route_flow(passenger_id: str, session_id: str, user_message: str, lat: Optional[float], lon: Optional[float]) -> str:
-    g = _build_graph()
-    stations = g["stations"]
-    by_id = g["by_id"]
-    adj = g["adj"]
+def route_flow(
+    passenger_id: str,
+    session_id: str,
+    user_message: str,
+    lat: Optional[float],
+    lon: Optional[float]
+) -> Dict[str, Any]:
+    session = get_session(passenger_id, session_id)
+    state = session.get("state") or "menu"
+    data = session.get("data", {}) or {}
+
+    msg = (user_message or "").strip()
+    msg = _strip_opt_prefix(msg)
+
+    # If showing route, allow actions
+    if state == RT_SHOWING:
+        if msg == "1":
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {"matched_faq_id": None, "answer": "تمام. وين تبي تروح؟", "confidence": 1.0, "type": "text"}
+        if msg == "2":
+            reset_session(passenger_id, session_id)
+            return menu_response()
+
+        # if user typed a new destination directly while showing
+        save_session(passenger_id, session_id, RT_ASK_DEST, data)
+        state = RT_ASK_DEST
+
+    # Ask destination
+    if state == RT_ASK_DEST:
+        if not msg:
+            return {"matched_faq_id": None, "answer": "وين تبي تروح؟ (مثال: البوليفارد)", "confidence": 1.0, "type": "text"}
+
+        # Need user location to choose nearest station
+        if lat is None or lon is None:
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {
+                "matched_faq_id": None,
+                "answer": "عشان احدد اقرب محطة لك، فعّلي الموقع بالتطبيق ثم ارسلي اسم وجهتك مرة ثانية.",
+                "confidence": 1.0,
+                "type": "text"
+            }
+
+        # 1) Geocode destination (place -> lat/lon)
+        try:
+            place = geocode_place(msg)  # expected: dict with lat/lon/name/address
+        except Exception:
+            place = None
+
+        if not place or place.get("lat") is None or place.get("lon") is None:
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {
+                "matched_faq_id": None,
+                "answer": "ما قدرت احدد مكان الوجهة. اكتبي اسم اوضح (مثال: البوليفارد سيتي).",
+                "confidence": 1.0,
+                "type": "text"
+            }
+
+        dest_lat = float(place["lat"])
+        dest_lon = float(place["lon"])
+        dest_label = (place.get("name") or place.get("formatted_address") or msg).strip()
+
+        # 2) Nearest stations (start near user, end near destination)
+        g = _build_graph()
+        stations = g["stations"]
+        by_id = g["by_id"]
+        adj = g["adj"]
+
+        start_station = _find_nearest_station(lat, lon, stations)
+        end_station = _find_nearest_station(dest_lat, dest_lon, stations)
+
+        if not start_station or not end_station:
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {"matched_faq_id": None, "answer": "ما قدرت احدد اقرب محطات حاليا.", "confidence": 1.0, "type": "text"}
+
+        start_id = start_station["id"]
+        end_id = end_station["id"]
+
+        # 3) Metro route
+        path_ids, metro_min_f = _dijkstra(adj, start_id, end_id)
+        if not path_ids:
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {"matched_faq_id": None, "answer": "ما قدرت القى مسار مترو بين اقرب محطتين حاليا.", "confidence": 1.0, "type": "text"}
+
+        metro_min = int(round(metro_min_f or 0.0))
+
+        # 4) Walking + Driving times (both)
+        walk_to_start = drive_to_start = None
+        walk_from_end = drive_from_end = None
+
+        try:
+            a = get_walk_drive(
+    origin=(float(lat), float(lon)),
+    destination=(float(start_station["lat"]), float(start_station["lon"]))
+)
+            walk_to_start  = (a.get("walk")  or {}).get("duration_min")
+            drive_to_start = (a.get("drive") or {}).get("duration_min")
+        except Exception:
+            pass
+
+        try:
+            b = get_walk_drive(
+                origin=(float(end_station["lat"]), float(end_station["lon"])),
+                destination=(float(dest_lat), float(dest_lon)),
+            )
+            walk_from_end  = (b.get("walk")  or {}).get("duration_min")
+            drive_from_end = (b.get("drive") or {}).get("duration_min")
+        except Exception:
+            pass
+
+        steps = _make_route_steps(path_ids, by_id)
+        print("WALK/DRIVE TO START:", a)
+
+        # Save result for "re-show" / change destination
+        data["rt_last"] = {
+            "dest_label": dest_label,
+            "dest_lat": dest_lat,
+            "dest_lon": dest_lon,
+            "start_id": start_id,
+            "end_id": end_id,
+            "metro_min": metro_min,
+            "walk_to_start": walk_to_start,
+            "drive_to_start": drive_to_start,
+            "walk_from_end": walk_from_end,
+            "drive_from_end": drive_from_end,
+            "path_ids": path_ids,
+        }
+        save_session(passenger_id, session_id, RT_SHOWING, data)
+
+        title = f"هذا افضل مسار للوجهة: {dest_label}"
+        return _route_card_response(
+            title=title,
+            start_station=start_station,
+            end_station=end_station,
+            dest_label=dest_label,
+            metro_min=metro_min,
+            walk_to_start=walk_to_start,
+            drive_to_start=drive_to_start,
+            walk_from_end=walk_from_end,
+            drive_from_end=drive_from_end,
+            steps=steps,
+        )
+
+    # Fallback: reset to menu
+    save_session(passenger_id, session_id, "menu", {})
+    return {"matched_faq_id": None, "answer": "اختاري تخطيط المسار من القائمة.", "confidence": 1.0, "type": "text"}
+
+
+# ============================================================
+# Schedule flow UPDATED (always returns schedule_inline)
+# ============================================================
+
+def _default_station_codes_from_map(stations: List[Dict[str, Any]]) -> List[str]:
+    m = _load_station_id_map()
+    if not m:
+        return []
+
+    by_id = {s.get("id"): s for s in stations if s.get("id")}
+    out: List[str] = []
+
+    for key in STATION_DEFAULT_ORDER:
+        raw = (m.get(key) or "").strip()
+        aliases = _aliases_from_map_value(raw)
+        if not aliases:
+            continue
+
+        candidate_code = aliases[-1]
+        if candidate_code and (" " not in candidate_code) and (candidate_code in by_id):
+            out.append(candidate_code)
+            continue
+
+        found_code = None
+        for a in aliases:
+            found = _find_station_by_text(a, stations, use_map_aliases=False)
+            if found:
+                found_code = found.get("id")
+                break
+        if found_code:
+            out.append(found_code)
+
+    return list(dict.fromkeys([x for x in out if x]))
+
+
+def _schedule_station_options(stations: List[Dict[str, Any]], limit: int = 6) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
+    by_id = {s.get("id"): s for s in stations if s.get("id")}
+    codes = _default_station_codes_from_map(stations)
+
+    picks: List[Dict[str, Any]] = [by_id[c] for c in codes if c in by_id]
+
+    if len(picks) < limit:
+        remaining = [s for s in stations if s.get("id") not in set(codes)]
+        remaining = sorted(remaining, key=lambda s: (s.get("line", ""), s.get("seq") is None, s.get("seq") or 10**9))
+        picks.extend(remaining[: (limit - len(picks))])
+
+    picks = picks[:limit]
+
+    options: List[Dict[str, str]] = []
+    opt_map: Dict[str, str] = {}
+    for i, s in enumerate(picks, start=1):
+        sid = str(s.get("id") or "")
+        label = _station_display(s)
+        options.append({"id": str(i), "label": label})
+        opt_map[str(i)] = sid
+
+    return options, opt_map
+
+
+# kept (not used directly now)
+def _next_trips_today_for_station(station_id: str, now_utc: datetime, limit: int = 4) -> List[Dict[str, Any]]:
+    trips = fetch_trips_for_station_today(
+        station_id,
+        dt=now_utc,
+        limit=max(0, int(limit)),
+    )
+    return trips[: max(0, int(limit))]
+
+
+# NEW: schedule_inline payload (Flutter expects station_id + station_name in raw)
+def _schedule_inline_response(station_id: str, station_label: str, answer: str) -> Dict[str, Any]:
+    return {
+        "matched_faq_id": None,
+        "answer": answer,
+        "confidence": 1.0,
+        "type": "schedule_inline",
+        "station_id": station_id,         # important
+        "station_name": station_label,    # important
+        "options": [
+            {"id": "1", "label": "تغيير المحطة"},
+            {"id": "2", "label": "رجوع للقائمة"},
+        ],
+    }
+
+
+def schedule_flow(passenger_id: str, session_id: str, user_message: str) -> Dict[str, Any]:
+    msg_raw = (user_message or "").strip()
+    msg = _strip_opt_prefix(msg_raw)
 
     session = get_session(passenger_id, session_id)
     state = session.get("state") or "menu"
     data = session.get("data", {}) or {}
 
-    if state == "rt_wait_dest":
-        msg = (user_message or "").strip()
-
-        dest_map = (data.get("rt_dest_map") or {})
-        start_id = data.get("rt_start_station_id")
-
-        if not start_id or start_id not in by_id:
-            save_session(passenger_id, session_id, "menu", {})
-            return "حدث خطأ في تحديد نقطة الانطلاق. اختاري تخطيط المسار من القائمة مرة اخرى."
-
-        if msg in dest_map:
-            dest_id = dest_map[msg]
-            if dest_id not in by_id:
-                return "الاختيار غير صحيح. اختاري رقم من الخيارات."
-        else:
-            dest_station = _find_station_by_text(msg, stations)
-            if not dest_station:
-                return "لم استطع تحديد الوجهة. اكتبي اسم محطة الوجهة او اختاري رقم من الخيارات."
-            dest_id = dest_station["id"]
-
-        if dest_id == start_id:
-            return "الوجهة هي نفس محطة الانطلاق. اختاري محطة اخرى."
-
-        path_ids, total_min = _dijkstra(adj, start_id, dest_id)
-        if not path_ids:
-            return "لم استطع ايجاد مسار بين المحطتين حاليا."
-
-        path_names = [_station_display(by_id[sid]) for sid in path_ids]
-        total_min_int = int(round(total_min or 0.0))
-
-        save_session(passenger_id, session_id, "menu", {})
-
-        lines = []
-        lines.append("تم.")
-        lines.append(f"محطة الانطلاق: {_station_display(by_id[start_id])}")
-        lines.append(f"الوجهة: {_station_display(by_id[dest_id])}")
-        lines.append(f"المدة التقديرية: {total_min_int} دقيقة")
-        lines.append("")
-        lines.append("المسار:")
-        for i, n in enumerate(path_names, start=1):
-            lines.append(f"{i}. {n}")
-
-        return "\n".join(lines)
-
-    save_session(passenger_id, session_id, "menu", {})
-    return "اختاري تخطيط المسار من القائمة."
-
-
-# ----------------------------
-# Schedule flow (sch_*)
-# ----------------------------
-def schedule_flow(passenger_id: str, session_id: str, user_message: str) -> Dict[str, Any]:
     stations = _load_stations()
-    msg = (user_message or "").strip()
+    by_id = {s["id"]: s for s in stations}
 
-    # If user sends empty or "options" -> show station options again
-    if msg.strip().lower() in {"", "options", "opt", "محطات", "اختيارات"}:
-        return _schedule_prompt_response(stations)
-
-    st = _find_station_by_text(msg, stations)
-    if not st:
-        # Return suggestions as options
-        sug = _station_suggestions(stations, query=msg, limit=STATION_OPTIONS_COUNT)
-        hint = "ما قدرت احدد المحطة. اختاري من الاقتراحات او اكتبي الاسم بشكل اوضح."
+    # show station suggestions
+    if _norm_ar(msg) in {"", "options", "opt", "محطات", "اختيارات"}:
+        options, opt_map = _schedule_station_options(stations, limit=STATION_OPTIONS_COUNT)
+        data["sch_station_opt_map"] = opt_map
+        save_session(passenger_id, session_id, SCH_CHOOSE_STATION, data)
         return {
             "matched_faq_id": None,
-            "answer": hint,
+            "answer": "تمام. اختاري/اكتبي اسم المحطة عشان اعرض لك اقرب الرحلات القادمة.",
             "confidence": 1.0,
             "type": "stations",
-            "options": sug
+            "options": options,
         }
 
-    trips = fetch_trips_for_station_today(st["id"])
-    if not trips:
-        save_session(passenger_id, session_id, "menu", {})
-        return {
-            "matched_faq_id": None,
-            "answer": f"ما لقيت رحلات اليوم للمحطة: {_station_display(st)}.",
-            "confidence": 1.0,
-            "type": "text"
-        }
+    # while showing trips
+    if state == SCH_SHOWING_TRIPS:
+        if msg == "1":
+            options, opt_map = _schedule_station_options(stations, limit=STATION_OPTIONS_COUNT)
+            data["sch_station_opt_map"] = opt_map
+            save_session(passenger_id, session_id, SCH_CHOOSE_STATION, data)
+            return {
+                "matched_faq_id": None,
+                "answer": "تمام. اختاري محطة جديدة.",
+                "confidence": 1.0,
+                "type": "stations",
+                "options": options,
+            }
+        if msg == "2":
+            save_session(passenger_id, session_id, "menu", {})
+            return menu_response()
 
-    lines: List[str] = []
-    lines.append(f"مواعيد رحلات اليوم لمحطة: {_station_display(st)}")
-    lines.append("")
+        state = SCH_CHOOSE_STATION
 
-    for i, tr in enumerate(trips, start=1):
-        line_name = (tr.get("line") or "").strip()
-        times = tr.get("times") or {}
-        t_here = times.get(st["id"]) or times.get(st.get("code")) or "غير متوفر"
+    # choose station
+    if state == SCH_CHOOSE_STATION or state == "menu":
+        opt_map = (data.get("sch_station_opt_map") or {})
+        st_id = None
+        if msg in opt_map:
+            st_id = opt_map[msg]
 
-        row = f"{i}. {t_here}"
-        if line_name:
-            row += f" - {line_name}"
-        lines.append(row)
+        if not st_id:
+            found = _find_station_by_text(msg, stations, use_map_aliases=True)
+            st_id = found["id"] if found else None
 
-    save_session(passenger_id, session_id, "menu", {})
+        if not st_id or st_id not in by_id:
+            options, new_map = _schedule_station_options(stations, limit=STATION_OPTIONS_COUNT)
+            data["sch_station_opt_map"] = new_map
+            save_session(passenger_id, session_id, SCH_CHOOSE_STATION, data)
+            return {
+                "matched_faq_id": None,
+                "answer": "ما قدرت احدد المحطة. اختاري من الاقتراحات او اكتبي الاسم بشكل اوضح.",
+                "confidence": 1.0,
+                "type": "stations",
+                "options": options,
+            }
+
+        data["sch_station_id"] = st_id
+        station_label = _station_display(by_id[st_id])
+
+        # IMPORTANT CHANGE:
+        # Backend no longer decides 'today trips' or filters.
+        # Flutter ChatScheduleInline will fetch next trips from Firestore within 10 minutes and limit 4.
+        save_session(passenger_id, session_id, SCH_SHOWING_TRIPS, data)
+
+        return _schedule_inline_response(
+            station_id=st_id,
+            station_label=station_label,
+            answer=f"تمام، هذي أقرب الرحلات للمحطة: {station_label}",
+        )
+
+    # fallback
+    save_session(passenger_id, session_id, SCH_CHOOSE_STATION, data)
+    options, opt_map = _schedule_station_options(stations, limit=STATION_OPTIONS_COUNT)
+    data["sch_station_opt_map"] = opt_map
     return {
         "matched_faq_id": None,
-        "answer": "\n".join(lines),
+        "answer": "اختاري محطة عشان اعرض لك اقرب الرحلات.",
         "confidence": 1.0,
-        "type": "text"
+        "type": "stations",
+        "options": options,
     }
 
 
@@ -586,55 +993,36 @@ def ask(req: AskReq):
         session = get_session(passenger_id, session_id)
         state = (session.get("state") or "menu")
 
-        # Always show menu for explicit commands
         if question.strip().lower() in ["", "menu", "start"]:
             reset_session(passenger_id, session_id)
             return menu_response()
 
-        # Exit to menu from any state
         if _is_exit_to_menu(question):
             reset_session(passenger_id, session_id)
             return menu_response()
 
-        # If user is inside Lost & Found flow
         if str(state).startswith("lf_"):
             reply_text = handle_lost_found_flow(
                 session_id=session_id,
                 user_message=question,
                 passenger_id=passenger_id
             )
-            return {
-                "matched_faq_id": None,
-                "answer": reply_text,
-                "confidence": 1.0,
-                "type": "text"
-            }
+            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
 
-        # If user is inside Route flow
+        # NEW: route states handled by route_flow and returned as dict
         if str(state).startswith("rt_"):
-            reply_text = route_flow(
+            return route_flow(
                 passenger_id=passenger_id,
                 session_id=session_id,
                 user_message=question,
                 lat=lat,
                 lon=lon
             )
-            return {
-                "matched_faq_id": None,
-                "answer": reply_text,
-                "confidence": 1.0,
-                "type": "text"
-            }
 
-        # If user is inside Schedule flow
-        if state == SCHEDULE_STATE:
-            return schedule_flow(
-                passenger_id=passenger_id,
-                session_id=session_id,
-                user_message=question
-            )
+        #  schedule states
+        if state in {SCH_CHOOSE_STATION, SCH_SHOWING_TRIPS}:
+            return schedule_flow(passenger_id=passenger_id, session_id=session_id, user_message=question)
 
-        # If user is inside General Questions state, do not auto-map to menu
         if state == GENERAL_STATE:
             faqs = fetch_all_faq()
             result = ask_llm(question, faqs)
@@ -645,92 +1033,43 @@ def ask(req: AskReq):
                 "type": "text"
             }
 
-        # Only map menu choice when state is menu
         mapped_menu = _menu_choice_from_text(question) if state == "menu" else None
         if mapped_menu is not None:
             question = mapped_menu
 
-        # If still on menu and not a valid choice, show menu again
         if state == "menu" and question not in ALLOWED_MENU_CHOICES:
             return menu_response()
 
-        # Option 1: General questions
         if question == "1":
             save_session(passenger_id, session_id, GENERAL_STATE, session.get("data", {}) or {})
-            return {
-                "matched_faq_id": None,
-                "answer": "تم. ارسلي سؤالك العام وانا اجاوبك.",
-                "confidence": 1.0,
-                "type": "text"
-            }
+            return {"matched_faq_id": None, "answer": "تم. ارسلي سؤالك العام وانا اجاوبك.", "confidence": 1.0, "type": "text"}
 
-        # Option 2: Lost & Found
         if question == "2":
-            reply_text = handle_lost_found_flow(
-                session_id=session_id,
-                user_message="menu",
-                passenger_id=passenger_id
-            )
-            return {
-                "matched_faq_id": None,
-                "answer": reply_text,
-                "confidence": 1.0,
-                "type": "text"
-            }
+            reply_text = handle_lost_found_flow(session_id=session_id, user_message="menu", passenger_id=passenger_id)
+            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
 
-        # Option 3: Schedule (activate schedule state) + return station options ✅
         if question == "3":
-            save_session(passenger_id, session_id, SCHEDULE_STATE, session.get("data", {}) or {})
-            stations = _load_stations()
-            return _schedule_prompt_response(stations)
-
-        # Option 4: Route planning
-        if question == "4":
-            if lat is None or lon is None:
-                save_session(passenger_id, session_id, "menu", session.get("data", {}) or {})
-                return {
-                    "matched_faq_id": None,
-                    "answer": "لتحديد اقرب محطة، فعلي الموقع في التطبيق ثم حاولي مرة اخرى.",
-                    "confidence": 1.0,
-                    "type": "text"
-                }
-
-            stations = _load_stations()
-            nearest = _find_nearest_station(lat, lon, stations)
-            if not nearest:
-                save_session(passenger_id, session_id, "menu", session.get("data", {}) or {})
-                return {
-                    "matched_faq_id": None,
-                    "answer": "لم استطع تحديد اقرب محطة حاليا.",
-                    "confidence": 1.0,
-                    "type": "text"
-                }
-
-            options = _make_destination_options(nearest["id"], lat, lon, stations)
-            dest_map = {str(i + 1): s["id"] for i, s in enumerate(options)}
-
             data = session.get("data", {}) or {}
-            data["rt_start_station_id"] = nearest["id"]
-            data["rt_dest_map"] = dest_map
-            save_session(passenger_id, session_id, "rt_wait_dest", data)
-
-            lines = []
-            lines.append(f"تم تحديد اقرب محطة لك: {_station_display(nearest)}")
-            lines.append("اختاري وجهتك برقم من الخيارات او اكتبي اسم محطة الوجهة:")
-            for i, s in enumerate(options, start=1):
-                lines.append(f"{i} - {_station_display(s)}")
-
+            stations = _load_stations()
+            options, opt_map = _schedule_station_options(stations, limit=STATION_OPTIONS_COUNT)
+            data["sch_station_opt_map"] = opt_map
+            save_session(passenger_id, session_id, SCH_CHOOSE_STATION, data)
             return {
                 "matched_faq_id": None,
-                "answer": "\n".join(lines),
+                "answer": "تمام. اختاري/اكتبي اسم المحطة عشان اعرض لك اقرب الرحلات القادمة.",
                 "confidence": 1.0,
-                "type": "text"
+                "type": "stations",
+                "options": options,
             }
 
-        # Default: answer with FAQ + LLM
+        # UPDATED: route entry = ask destination مباشرة (بدون خيارات)
+        if question == "4":
+            data = session.get("data", {}) or {}
+            save_session(passenger_id, session_id, RT_ASK_DEST, data)
+            return {"matched_faq_id": None, "answer": "وين تبي تروح؟", "confidence": 1.0, "type": "text"}
+
         faqs = fetch_all_faq()
         result = ask_llm(question, faqs)
-
         return {
             "matched_faq_id": result.get("matched_faq_id", None),
             "answer": result.get("answer", ""),
@@ -767,7 +1106,6 @@ async def upload_image(
     data = session.get("data", {}) or {}
     data["photo_url"] = photo_url
 
-    # Keep the state as-is
     save_session(passenger_id, session_id, session.get("state", "menu"), data)
 
     return {"photo_url": photo_url}

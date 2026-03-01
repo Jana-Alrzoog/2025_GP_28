@@ -16,7 +16,11 @@ def _resolve_cred_path() -> str:
       2) GOOGLE_APPLICATION_CREDENTIALS
       3) default "serviceAccountKey.json" (project root relative)
     """
-    cred_path = os.getenv("FIREBASE_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "serviceAccountKey.json"
+    cred_path = (
+        os.getenv("FIREBASE_CRED")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        or "serviceAccountKey.json"
+    )
     cred_path = cred_path.strip().strip('"').strip("'")
     return cred_path
 
@@ -29,7 +33,6 @@ def get_db():
 
     cred_path = _resolve_cred_path()
 
-    # Fail fast with a clear error if the file is missing
     if not os.path.exists(cred_path):
         raise RuntimeError(
             f"Firebase credential file not found: {cred_path}\n"
@@ -40,7 +43,6 @@ def get_db():
 
     cred = credentials.Certificate(cred_path)
 
-    # Initialize Firebase once
     if not firebase_admin._apps:
         bucket_name = os.getenv("FIREBASE_STORAGE_BUCKET")
         init_opts = {}
@@ -84,28 +86,6 @@ def fetch_all_faq():
             "category": data.get("category", ""),
         })
     return items
-
-
-def get_session(session_id: str):
-    db = get_db()
-    doc = db.collection("lf_sessions").document(session_id).get()
-
-    if not doc.exists:
-        return {"state": "menu", "data": {}, "updated_at": None}
-
-    return doc.to_dict() or {"state": "menu", "data": {}, "updated_at": None}
-
-
-def save_session(session_id: str, state: str, data: dict):
-    db = get_db()
-    db.collection("lf_sessions").document(session_id).set(
-        {
-            "state": state,
-            "data": data,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        },
-        merge=True
-    )
 
 
 def save_lost_found_report(report: dict):

@@ -8,9 +8,15 @@ import 'package:http/http.dart' as http;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-
 import 'package:geolocator/geolocator.dart';
+
 import 'package:Masar_application_1/services/location_service.dart';
+
+// ✅ inline schedule widget inside chat
+import 'package:Masar_application_1/widgets/chat_schedule_inline.dart';
+
+// ✅ NEW: route card widget
+import 'package:Masar_application_1/widgets/route_card.dart';
 
 class AssistantTab extends StatefulWidget {
   const AssistantTab({super.key});
@@ -40,10 +46,73 @@ class _AssistantTabState extends State<AssistantTab> {
 
   bool _sending = false;
 
+  // ✅ Station map (S1..S6 -> variants)
+  final Map<String, String> _stationIdMap = const {
+    "S1": "المركز المالي/KAFD",
+    "S2": "stc/STC",
+    "S3": "قصر الحكم/Qasr Al Hokm/Qasr Al-Hukm/QASR",
+    "S4": "المتحف الوطني/National Museum",
+    "S5": "المطار صالة 1-2/Terminal 1-2/AIRP_T12",
+    "S6": "المدينة الصناعية الأولى/First Industrial City",
+  };
+
   // Detect base URL for backend (port 8000)
   String _detectBaseUrl() {
     if (kIsWeb) return "http://localhost:8000";
     return "http://10.0.2.2:8000";
+  }
+
+  // ----------------------------
+  // Station ID resolver (IMPORTANT)
+  // ----------------------------
+  String _norm(String s) {
+    final t = s.trim().toLowerCase();
+    return t
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ى', 'ي')
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  /// يحوّل أي مدخل (S1 / KAFD / "المركز المالي") إلى station_id الحقيقي S1..S6
+  String? _resolveStationIdFromAny(String? input, {String? stationName}) {
+    final raw = (input ?? '').trim();
+    final name = (stationName ?? '').trim();
+
+    if (raw.isEmpty && name.isEmpty) return null;
+
+    // إذا أصلاً S1..S6
+    if (raw.isNotEmpty && RegExp(r'^S\d+$', caseSensitive: false).hasMatch(raw)) {
+      return raw.toUpperCase();
+    }
+
+    final nRaw = _norm(raw);
+    final nName = _norm(name);
+
+    for (final e in _stationIdMap.entries) {
+      final stationId = e.key; // S1..S6
+      final variants = e.value
+          .split('/')
+          .map((x) => x.trim())
+          .where((x) => x.isNotEmpty)
+          .toList();
+
+      for (final v in variants) {
+        final nv = _norm(v);
+
+        // مساواة
+        if (nv == nRaw && nRaw.isNotEmpty) return stationId;
+        if (nv == nName && nName.isNotEmpty) return stationId;
+
+        // contains
+        if (nRaw.isNotEmpty && (nv.contains(nRaw) || nRaw.contains(nv))) return stationId;
+        if (nName.isNotEmpty && (nv.contains(nName) || nName.contains(nv))) return stationId;
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -112,11 +181,19 @@ class _AssistantTabState extends State<AssistantTab> {
     return (data["photo_url"] ?? "").toString();
   }
 
-  Future<String> _askBackend(String text) async {
+  // ----------------------------
+  // Backend call
+  // ----------------------------
+  Future<_BackendReply> _askBackend(String text) async {
     final uri = Uri.parse("$_baseUrl/ask");
 
     if (!_sessionReady || _passengerId == null) {
-      return "لم يتم تسجيل الدخول. سجّل دخولك ثم افتح المساعد مرة ثانية.";
+      return _BackendReply(
+        answer: "لم يتم تسجيل الدخول. سجّل دخولك ثم افتح المساعد مرة ثانية.",
+        type: "text",
+        options: const [],
+        raw: const {},
+      );
     }
 
     double? lat;
@@ -138,7 +215,12 @@ class _AssistantTabState extends State<AssistantTab> {
       if (!serviceEnabled ||
           currentPerm == LocationPermission.denied ||
           currentPerm == LocationPermission.deniedForever) {
-        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.";
+        return _BackendReply(
+          answer: "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.",
+          type: "text",
+          options: const [],
+          raw: const {},
+        );
       }
 
       final Position? pos = await LocationService.getCurrentPosition();
@@ -146,7 +228,12 @@ class _AssistantTabState extends State<AssistantTab> {
       lon = pos?.longitude;
 
       if (lat == null || lon == null) {
-        return "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.";
+        return _BackendReply(
+          answer: "تعذر الحصول على موقعك حالياً. تأكد من تفعيل GPS ومنح إذن الموقع للتطبيق.",
+          type: "text",
+          options: const [],
+          raw: const {},
+        );
       }
     }
 
@@ -168,20 +255,69 @@ class _AssistantTabState extends State<AssistantTab> {
           .timeout(const Duration(seconds: 20));
 
       if (res.statusCode != 200) {
-        return "Server error: ${res.statusCode}\n${res.body}";
+        return _BackendReply(
+          answer: "Server error: ${res.statusCode}\n${res.body}",
+          type: "error",
+          options: const [],
+          raw: const {},
+        );
       }
 
       final data = jsonDecode(res.body);
-      return (data["answer"] ?? "").toString().trim();
+
+      // ✅ DEBUG مهم جدًا (خلّيه مؤقتًا)
+      // ignore: avoid_print
+      print("BACKEND RAW => $data");
+
+      var answer = (data["answer"] ?? "").toString().trim();
+      final type = (data["type"] ?? "text").toString();
+
+      // Friendly Firestore index error
+      if (answer.contains("FailedPrecondition") && answer.contains("requires an index")) {
+        answer =
+            "فيه إعداد ناقص في Firebase (Index) عشان نجيب مواعيد الرحلات.\n"
+            "افتحي رابط (create index) اللي ظهر لك مرة وحدة وسوي Create.\n"
+            "بعدها المواعيد بتشتغل طبيعي ✅";
+      }
+
+      // Parse options from JSON if present
+      final options = <_OptionItem>[];
+      final rawOpts = data["options"];
+      if (rawOpts is List) {
+        for (final it in rawOpts) {
+          if (it is Map) {
+            final id = (it["id"] ?? "").toString().trim();
+            final label = (it["label"] ?? "").toString().trim();
+            if (id.isNotEmpty && label.isNotEmpty) {
+              options.add(_OptionItem(id: id, label: label));
+            }
+          }
+        }
+      }
+
+      return _BackendReply(
+        answer: answer,
+        type: type,
+        options: options,
+        raw: (data is Map<String, dynamic>) ? data : const {},
+      );
     } catch (_) {
-      return "Failed to connect to server.\n"
-          "Check:\n"
-          "- backend running on port 8000\n"
-          "- baseUrl = $_baseUrl\n"
-          "- Using Android emulator => 10.0.2.2\n";
+      return _BackendReply(
+        answer: "Failed to connect to server.\n"
+            "Check:\n"
+            "- backend running on port 8000\n"
+            "- baseUrl = $_baseUrl\n"
+            "- Using Android emulator => 10.0.2.2\n",
+        type: "error",
+        options: const [],
+        raw: const {},
+      );
     }
   }
 
+  // ----------------------------
+  // Open -> load menu
+  // ----------------------------
   Future<void> _loadMenuOnOpen() async {
     if (_loadingMenu) return;
     _loadingMenu = true;
@@ -195,22 +331,25 @@ class _AssistantTabState extends State<AssistantTab> {
     _setTyping(true);
     _scrollDown();
 
-    final answer = await _askBackend("MENU");
+    final reply = await _askBackend("MENU");
     if (!mounted) return;
 
     _setTyping(false);
 
-    final parsed = _parseBotReply(answer);
+    final fallback = _parseBotReply(reply.answer);
+    final effectiveText = fallback.cleanedText.isEmpty
+        ? (reply.answer.isEmpty ? "Empty reply" : reply.answer)
+        : fallback.cleanedText;
+
     setState(() {
-      _msgs.add(_Msg(
-        text: parsed.cleanedText.isEmpty
-            ? (answer.isEmpty ? "Empty reply" : answer)
-            : parsed.cleanedText,
-        fromBot: true,
-      ));
+      _msgs.add(_Msg(text: effectiveText, fromBot: true));
     });
 
-    _applyOptions(parsed.options);
+    final effectiveOptions = reply.options.isNotEmpty
+        ? reply.options
+        : fallback.options.map((o) => _OptionItem(id: o.index.toString(), label: o.label)).toList();
+
+    _applyOptions(effectiveOptions);
     _scrollDown();
     _loadingMenu = false;
   }
@@ -227,12 +366,9 @@ class _AssistantTabState extends State<AssistantTab> {
     });
   }
 
-  // Parse bot reply:
-  // - Extract numbered options from lines like "1️⃣ label" or "1 - label"
-  // - Remove those option lines from the chat bubble (keeps bubble clean)
   _ParsedBotReply _parseBotReply(String botText) {
     final lines = botText.split('\n');
-    final options = <_OptionItem>[];
+    final options = <_OptionItemIndexOnly>[];
     final keptLines = <String>[];
 
     for (final raw in lines) {
@@ -241,7 +377,7 @@ class _AssistantTabState extends State<AssistantTab> {
 
       final matchEmoji = RegExp(r'^(\d+)️⃣\s+(.+)$').firstMatch(line);
       if (matchEmoji != null) {
-        options.add(_OptionItem(
+        options.add(_OptionItemIndexOnly(
           index: int.parse(matchEmoji.group(1)!),
           label: matchEmoji.group(2)!.trim(),
         ));
@@ -250,7 +386,7 @@ class _AssistantTabState extends State<AssistantTab> {
 
       final matchDash = RegExp(r'^(\d+)\s*[-–]\s*(.+)$').firstMatch(line);
       if (matchDash != null) {
-        options.add(_OptionItem(
+        options.add(_OptionItemIndexOnly(
           index: int.parse(matchDash.group(1)!),
           label: matchDash.group(2)!.trim(),
         ));
@@ -281,6 +417,17 @@ class _AssistantTabState extends State<AssistantTab> {
     });
   }
 
+  void _applyOptionsOrFallback(List<_OptionItem> opts) {
+    if (opts.isEmpty) {
+      _applyOptions([_OptionItem(id: "MENU", label: "رجوع للقائمة")]);
+    } else {
+      _applyOptions(opts);
+    }
+  }
+
+  // ----------------------------
+  // Send text
+  // ----------------------------
   Future<void> _send([String? forcedText]) async {
     if (_sending) return;
 
@@ -299,32 +446,80 @@ class _AssistantTabState extends State<AssistantTab> {
     _setTyping(true);
     _scrollDown();
 
-    final answer = await _askBackend(txt);
+    final reply = await _askBackend(txt);
     if (!mounted) return;
 
     _setTyping(false);
 
-    final parsed = _parseBotReply(answer);
+    // ✅ route card
+    if (reply.type == "route_card") {
+      final route = (reply.raw["route"] is Map)
+          ? (reply.raw["route"] as Map).cast<String, dynamic>()
+          : <String, dynamic>{};
+
+      setState(() {
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
+          route: route,
+        ));
+        _sending = false;
+      });
+
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return;
+    }
+
+    // ✅ schedule inline
+    if (reply.type == "schedule_inline") {
+      final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
+      final stName = (reply.raw["station_name"] ?? "").toString().trim();
+
+      final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
+
+      setState(() {
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
+          isScheduleInline: true,
+          scheduleStationId: resolvedId,
+          scheduleStationName: stName,
+        ));
+        _sending = false;
+      });
+
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return;
+    }
+
+    final fallback = _parseBotReply(reply.answer);
+    final effectiveText = fallback.cleanedText.isEmpty
+        ? (reply.answer.isEmpty ? "Empty reply" : reply.answer)
+        : fallback.cleanedText;
+
     setState(() {
-      _msgs.add(_Msg(
-        text: parsed.cleanedText.isEmpty
-            ? (answer.isEmpty ? "Empty reply" : answer)
-            : parsed.cleanedText,
-        fromBot: true,
-      ));
+      _msgs.add(_Msg(text: effectiveText, fromBot: true));
       _sending = false;
     });
 
-    _applyOptions(parsed.options);
+    final effectiveOptions = reply.options.isNotEmpty
+        ? reply.options
+        : fallback.options.map((o) => _OptionItem(id: o.index.toString(), label: o.label)).toList();
+
+    _applyOptions(effectiveOptions);
     _scrollDown();
   }
 
-  // Send option as plain number (best with your backend flows)
+  // ----------------------------
+  // Send option payload to backend
+  // ----------------------------
   Future<void> _sendOption(_OptionItem opt) async {
     if (_sending) return;
 
     final display = opt.label.trim();
-    final backend = opt.index.toString();
+    final backend = opt.id.trim();
 
     setState(() {
       _sending = true;
@@ -337,26 +532,75 @@ class _AssistantTabState extends State<AssistantTab> {
     _setTyping(true);
     _scrollDown();
 
-    final answer = await _askBackend(backend);
+    final reply = await _askBackend(backend);
     if (!mounted) return;
 
     _setTyping(false);
 
-    final parsed = _parseBotReply(answer);
+    // ✅ route card
+    if (reply.type == "route_card") {
+      final route = (reply.raw["route"] is Map)
+          ? (reply.raw["route"] as Map).cast<String, dynamic>()
+          : <String, dynamic>{};
+
+      setState(() {
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
+          route: route,
+        ));
+        _sending = false;
+      });
+
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return;
+    }
+
+    // ✅ schedule inline
+    if (reply.type == "schedule_inline") {
+      final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
+      final stName = (reply.raw["station_name"] ?? "").toString().trim();
+
+      final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
+
+      setState(() {
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
+          isScheduleInline: true,
+          scheduleStationId: resolvedId,
+          scheduleStationName: stName,
+        ));
+        _sending = false;
+      });
+
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return;
+    }
+
+    final fallback = _parseBotReply(reply.answer);
+    final effectiveText = fallback.cleanedText.isEmpty
+        ? (reply.answer.isEmpty ? "Empty reply" : reply.answer)
+        : fallback.cleanedText;
+
     setState(() {
-      _msgs.add(_Msg(
-        text: parsed.cleanedText.isEmpty
-            ? (answer.isEmpty ? "Empty reply" : answer)
-            : parsed.cleanedText,
-        fromBot: true,
-      ));
+      _msgs.add(_Msg(text: effectiveText, fromBot: true));
       _sending = false;
     });
 
-    _applyOptions(parsed.options);
+    final effectiveOptions = reply.options.isNotEmpty
+        ? reply.options
+        : fallback.options.map((o) => _OptionItem(id: o.index.toString(), label: o.label)).toList();
+
+    _applyOptions(effectiveOptions);
     _scrollDown();
   }
 
+  // ----------------------------
+  // Image attach
+  // ----------------------------
   Future<void> _attachAndSendImage() async {
     if (_uploadingImage || _sending) return;
 
@@ -381,12 +625,7 @@ class _AssistantTabState extends State<AssistantTab> {
         _sending = true;
         _hasOptions = false;
         _lastOptions = [];
-
-        _msgs.add(_Msg(
-          fromBot: false,
-          imageBytes: bytes,
-          text: "صورة مرفقة",
-        ));
+        _msgs.add(_Msg(fromBot: false, imageBytes: bytes));
       });
 
       _scrollDown();
@@ -395,24 +634,70 @@ class _AssistantTabState extends State<AssistantTab> {
 
       await _uploadImageToBackend(picked);
 
-      final answer = await _askBackend("تم");
+      final reply = await _askBackend("تم");
       if (!mounted) return;
 
       _setTyping(false);
 
-      final parsed = _parseBotReply(answer);
+      // ✅ route card
+      if (reply.type == "route_card") {
+        final route = (reply.raw["route"] is Map)
+            ? (reply.raw["route"] as Map).cast<String, dynamic>()
+            : <String, dynamic>{};
+
+        setState(() {
+          _uploadingImage = false;
+          _sending = false;
+          _msgs.add(_Msg(
+            fromBot: true,
+            text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
+            route: route,
+          ));
+        });
+
+        _applyOptionsOrFallback(reply.options);
+        _scrollDown();
+        return;
+      }
+
+      if (reply.type == "schedule_inline") {
+        final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
+        final stName = (reply.raw["station_name"] ?? "").toString().trim();
+        final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
+
+        setState(() {
+          _uploadingImage = false;
+          _sending = false;
+          _msgs.add(_Msg(
+            fromBot: true,
+            text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
+            isScheduleInline: true,
+            scheduleStationId: resolvedId,
+            scheduleStationName: stName,
+          ));
+        });
+
+        _applyOptionsOrFallback(reply.options);
+        _scrollDown();
+        return;
+      }
+
+      final fallback = _parseBotReply(reply.answer);
+      final effectiveText = fallback.cleanedText.isEmpty
+          ? (reply.answer.isEmpty ? "Empty reply" : reply.answer)
+          : fallback.cleanedText;
+
       setState(() {
         _uploadingImage = false;
         _sending = false;
-        _msgs.add(_Msg(
-          text: parsed.cleanedText.isEmpty
-              ? (answer.isEmpty ? "Empty reply" : answer)
-              : parsed.cleanedText,
-          fromBot: true,
-        ));
+        _msgs.add(_Msg(text: effectiveText, fromBot: true));
       });
 
-      _applyOptions(parsed.options);
+      final effectiveOptions = reply.options.isNotEmpty
+          ? reply.options
+          : fallback.options.map((o) => _OptionItem(id: o.index.toString(), label: o.label)).toList();
+
+      _applyOptions(effectiveOptions);
       _scrollDown();
     } catch (_) {
       if (!mounted) return;
@@ -426,45 +711,50 @@ class _AssistantTabState extends State<AssistantTab> {
     }
   }
 
+  // ----------------------------
+  // Icons for options
+  // ----------------------------
   IconData _iconForOptionText(String label) {
     final t = label.toLowerCase();
 
     if (t.contains("الإبلاغ") || t.contains("بلاغ") || t.contains("مفقود") || t.contains("lost")) {
       return Icons.report_gmailerrorred_outlined;
     }
-
     if (t.contains("الأسئلة") || t.contains("اسئلة") || t.contains("عام") || t.contains("help")) {
       return Icons.help_outline_rounded;
     }
-
     if (t.contains("مواعيد") || t.contains("الجدول") || t.contains("trip") || t.contains("schedule")) {
       return Icons.schedule_rounded;
     }
 
-    // Route planning: do not match the app name "مسار" by itself.
-    final isRoute =
-        t.contains("تخطيط") ||
+    final isRoute = t.contains("تخطيط") ||
         t.contains("طريق") ||
         t.contains("وجهة") ||
         t.contains("إلى") ||
         t.contains("الى") ||
         t.contains("route") ||
         t.contains("directions");
-    if (isRoute) {
-      return Icons.alt_route_rounded;
-    }
+    if (isRoute) return Icons.alt_route_rounded;
 
-    if (t.contains("محطة") || t.contains("مترو") || t.contains("كافد")) {
+    if (t.contains("اليوم") || t.contains("today")) return Icons.today_rounded;
+    if (t.contains("بكره") || t.contains("بكرة") || t.contains("tomorrow")) return Icons.calendar_month_rounded;
+    if (t.contains("تاريخ") || t.contains("date")) return Icons.event_rounded;
+
+    if (t.contains("رجوع") || t.contains("القائمه") || t.contains("القائمة") || t.contains("menu")) {
+      return Icons.arrow_back_rounded;
+    }
+    if (t.contains("تغيير")) return Icons.swap_horiz_rounded;
+
+    if (t.contains("محطه") || t.contains("محطة") || t.contains("مترو") || t.contains("kafd") || t.contains("stc")) {
       return Icons.train_outlined;
-    }
-
-    if (t.contains("اليوم") || t.contains("أمس") || t.contains("صباح") || t.contains("مساء")) {
-      return Icons.access_time_rounded;
     }
 
     return Icons.arrow_forward_ios_rounded;
   }
 
+  // ----------------------------
+  // Options UI
+  // ----------------------------
   Widget _buildOptionButtons() {
     if (!_hasOptions || _lastOptions.isEmpty) return const SizedBox.shrink();
 
@@ -490,11 +780,7 @@ class _AssistantTabState extends State<AssistantTab> {
             children: [
               const Icon(Icons.grid_view_rounded, size: 18, color: Color(0xFF5B3FCB)),
               const SizedBox(width: 8),
-              const Text(
-                "الخيارات",
-                textDirection: TextDirection.rtl,
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
+              const Text("الخيارات", textDirection: TextDirection.rtl, style: TextStyle(fontWeight: FontWeight.w800)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -503,10 +789,7 @@ class _AssistantTabState extends State<AssistantTab> {
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: Colors.black.withOpacity(0.06)),
                 ),
-                child: Text(
-                  "${_lastOptions.length}",
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
+                child: Text("${_lastOptions.length}", style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -550,6 +833,9 @@ class _AssistantTabState extends State<AssistantTab> {
     );
   }
 
+  // ----------------------------
+  // Input bar
+  // ----------------------------
   static const double _inputBarH = 58;
   static const double _gapAboveNav = 4;
   static const double bottomNavTotalHeight = 72;
@@ -576,9 +862,7 @@ class _AssistantTabState extends State<AssistantTab> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
-                      hintText: _uploadingImage
-                          ? 'جاري رفع الصورة…'
-                          : (_sending ? 'جاري الإرسال…' : 'اكتب رسالتك…'),
+                      hintText: _uploadingImage ? 'جاري رفع الصورة…' : (_sending ? 'جاري الإرسال…' : 'اكتب رسالتك…'),
                       filled: true,
                       fillColor: const Color(0xFFF5F5F5),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -600,9 +884,7 @@ class _AssistantTabState extends State<AssistantTab> {
                               child: Icon(
                                 Icons.photo_outlined,
                                 size: 20,
-                                color: (_uploadingImage || _sending)
-                                    ? Colors.black26
-                                    : const Color(0xFF3A3A3A),
+                                color: (_uploadingImage || _sending) ? Colors.black26 : const Color(0xFF3A3A3A),
                               ),
                             ),
                           ),
@@ -653,10 +935,27 @@ class _AssistantTabState extends State<AssistantTab> {
                   msg.fromBot && !msg.isTyping && _hasOptions && i == _msgs.length - 1;
 
               return Column(
-                crossAxisAlignment:
-                    msg.fromBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                crossAxisAlignment: msg.fromBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
                 children: [
                   _ChatBubble(msg: msg),
+
+                  // ✅ NEW: Route Card widget
+                  if (msg.fromBot && (msg.route != null) && msg.route!.isNotEmpty) RouteCard(route: msg.route!),
+
+                  // ✅ Inline schedule widget (inside chat)
+                  if (msg.fromBot &&
+                      msg.isScheduleInline == true &&
+                      (msg.scheduleStationId ?? "").trim().isNotEmpty)
+                    ChatScheduleInline(
+                      stationName: (msg.scheduleStationName ?? "").trim().isNotEmpty
+                          ? msg.scheduleStationName!.trim()
+                          : "المحطة",
+                      stationId: msg.scheduleStationId!.trim(), // ✅ S1..S6
+                      stationIdMap: _stationIdMap,
+                      windowMinutes: 10,
+                      limitTrips: 4,
+                    ),
+
                   if (isLastBotMsgWithOptions) _buildOptionButtons(),
                 ],
               );
@@ -674,15 +973,38 @@ class _AssistantTabState extends State<AssistantTab> {
   }
 }
 
+// ----------------------------
+// Models
+// ----------------------------
+class _BackendReply {
+  final String answer;
+  final String type;
+  final List<_OptionItem> options;
+  final Map<String, dynamic> raw;
+
+  _BackendReply({
+    required this.answer,
+    required this.type,
+    required this.options,
+    required this.raw,
+  });
+}
+
 class _OptionItem {
+  final String id; // payload to send to backend
+  final String label; // text shown to user
+  _OptionItem({required this.id, required this.label});
+}
+
+class _OptionItemIndexOnly {
   final int index;
   final String label;
-  _OptionItem({required this.index, required this.label});
+  _OptionItemIndexOnly({required this.index, required this.label});
 }
 
 class _ParsedBotReply {
   final String cleanedText;
-  final List<_OptionItem> options;
+  final List<_OptionItemIndexOnly> options;
   _ParsedBotReply({required this.cleanedText, required this.options});
 }
 
@@ -692,19 +1014,28 @@ class _Msg {
   final bool isTyping;
   final Uint8List? imageBytes;
 
+  final bool isScheduleInline;
+  final String? scheduleStationId; // ✅ S1..S6
+  final String? scheduleStationName;
+
+  final Map<String, dynamic>? route; // ✅ NEW
+
   _Msg({
     this.text,
     required this.fromBot,
     this.isTyping = false,
     this.imageBytes,
+    this.isScheduleInline = false,
+    this.scheduleStationId,
+    this.scheduleStationName,
+    this.route, // ✅ NEW
   });
 }
 
-/*
-  Tag icon support:
-  Extracts a tag only if it exists at the start of the bot message.
-  Example: "[LF_COLOR]\n2) ..." -> tag = LF_COLOR, cleanText = "2) ..."
-*/
+// ---------------------------------------------------------------------------
+// Chat bubble UI (نفس حقك - خليته زي ما هو)
+// ---------------------------------------------------------------------------
+
 class _TagParts {
   final String? tag;
   final String clean;
@@ -779,50 +1110,28 @@ Color _colorFromTag(String? tag) {
 
 Color _fallbackColorForText(String t) {
   final s = t.toLowerCase();
-  if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) {
-    return const Color(0xFFD32F2F);
-  }
-  if (s.contains("تذكرة") || s.contains("نجاح")) {
-    return const Color(0xFF2E7D32);
-  }
-  if (s.contains("محطة") || s.contains("وقت") || s.contains("تاريخ")) {
-    return const Color(0xFF1976D2);
-  }
+  if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) return const Color(0xFFD32F2F);
+  if (s.contains("تذكرة") || s.contains("نجاح")) return const Color(0xFF2E7D32);
+  if (s.contains("محطة") || s.contains("وقت") || s.contains("تاريخ")) return const Color(0xFF1976D2);
   return Colors.black54;
 }
 
-/*
-  Smart override:
-  If tag is wrong but text clearly indicates a step, use the matching icon.
-*/
 IconData _iconFromTagSmart(String? tag, String cleanText) {
-  if (tag == "LF_DONE" || tag == "LF_ERROR" || tag == "LF_START") {
-    return _iconFromTag(tag);
-  }
+  if (tag == "LF_DONE" || tag == "LF_ERROR" || tag == "LF_START") return _iconFromTag(tag);
 
   final s = cleanText.toLowerCase();
-
   if (s.contains("لون")) return Icons.color_lens_rounded;
   if (s.contains("الماركة") || s.contains("الموديل")) return Icons.sell_rounded;
-  if (s.contains("تفاصيل") || s.contains("علامة مميزة") || s.contains("علامه مميزه")) {
-    return Icons.notes_rounded;
-  }
-  if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) {
-    return Icons.photo_camera_rounded;
-  }
+  if (s.contains("تفاصيل") || s.contains("علامة مميزة") || s.contains("علامه مميزه")) return Icons.notes_rounded;
+  if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) return Icons.photo_camera_rounded;
   if (s.contains("محطة") || s.contains("محطه")) return Icons.location_on_rounded;
 
-  // Time/date detection: if it mentions date OR time OR "when"
   if (s.contains("متى") || s.contains("وقت") || s.contains("تاريخ")) {
-    if (s.contains("تاريخ") || RegExp(r'\d{4}-\d{2}-\d{2}').hasMatch(s)) {
-      return Icons.event_rounded;
-    }
+    if (s.contains("تاريخ") || RegExp(r'\d{4}-\d{2}-\d{2}').hasMatch(s)) return Icons.event_rounded;
     return Icons.schedule_rounded;
   }
 
-  if (s.contains("اسم") || s.contains("جوال") || s.contains("رقم")) {
-    return Icons.person_rounded;
-  }
+  if (s.contains("اسم") || s.contains("جوال") || s.contains("رقم")) return Icons.person_rounded;
 
   return _iconFromTag(tag);
 }
@@ -833,14 +1142,12 @@ class _ChatBubble extends StatelessWidget {
 
   IconData _fallbackBotIconForText(String t) {
     final s = t.toLowerCase();
-
     if (s.contains("بلاغ") || s.contains("مفقود")) return Icons.report_problem_outlined;
     if (s.contains("محطة") || s.contains("محطات")) return Icons.train_outlined;
     if (s.contains("وقت") || s.contains("متى") || s.contains("تاريخ")) return Icons.schedule_outlined;
     if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) return Icons.photo_camera_outlined;
     if (s.contains("رقم التذكرة") || s.contains("تذكرة")) return Icons.confirmation_number_outlined;
     if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) return Icons.error_outline;
-
     return Icons.smart_toy_outlined;
   }
 
@@ -852,19 +1159,14 @@ class _ChatBubble extends StatelessWidget {
     final align = isBot ? CrossAxisAlignment.start : CrossAxisAlignment.end;
 
     final rawText = (msg.text ?? "").trim();
-
-    final parts =
-        isBot ? _extractTagFromStart(rawText) : _TagParts(tag: null, clean: rawText);
+    final parts = isBot ? _extractTagFromStart(rawText) : _TagParts(tag: null, clean: rawText);
     final tag = parts.tag;
     final cleanText = parts.clean;
 
     final botIcon = isBot
         ? (tag != null ? _iconFromTagSmart(tag, cleanText) : _fallbackBotIconForText(cleanText))
         : null;
-
-    final iconColor = isBot
-        ? (tag != null ? _colorFromTag(tag) : _fallbackColorForText(cleanText))
-        : null;
+    final iconColor = isBot ? (tag != null ? _colorFromTag(tag) : _fallbackColorForText(cleanText)) : null;
 
     return Column(
       crossAxisAlignment: align,
@@ -872,9 +1174,7 @@ class _ChatBubble extends StatelessWidget {
         Container(
           margin: const EdgeInsets.symmetric(vertical: 6),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * .78,
-          ),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.only(
@@ -891,58 +1191,21 @@ class _ChatBubble extends StatelessWidget {
               )
             ],
           ),
-          child: Column(
-            crossAxisAlignment: align,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (msg.imageBytes != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    msg.imageBytes!,
-                    fit: BoxFit.cover,
-                    height: 180,
-                    width: double.infinity,
-                  ),
-                ),
-                if (cleanText.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isBot) ...[
-                        Icon(botIcon, size: 18, color: iconColor),
-                        const SizedBox(width: 8),
-                      ],
-                      Flexible(
-                        child: Text(
-                          cleanText,
-                          textDirection: TextDirection.rtl,
-                          style: TextStyle(color: fg, height: 1.4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ] else ...[
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isBot) ...[
-                      Icon(botIcon, size: 18, color: iconColor),
-                      const SizedBox(width: 8),
-                    ],
-                    Flexible(
-                      child: Text(
-                        cleanText,
-                        textDirection: TextDirection.rtl,
-                        style: TextStyle(color: fg, height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
+              if (isBot) ...[
+                Icon(botIcon, size: 18, color: iconColor),
+                const SizedBox(width: 8),
               ],
+              Flexible(
+                child: Text(
+                  cleanText,
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(color: fg, height: 1.4),
+                ),
+              ),
             ],
           ),
         ),
