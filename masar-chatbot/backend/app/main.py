@@ -24,7 +24,7 @@ from app.session_store import get_session, save_session, reset_session
 # Image upload
 from app.upload import upload_lost_found_image
 
-# Schedule (Firestore trips)  ✅ (kept, but schedule_flow will not rely on it)
+# Schedule (Firestore trips)
 from app.trips_store import fetch_trips_for_station_today
 
 app = FastAPI()
@@ -528,7 +528,6 @@ def _make_route_steps(path_ids: List[str], by_id: Dict[str, Dict[str, Any]]) -> 
     def station_name(sid: str) -> str:
         return _station_display(by_id[sid])
 
-    cur_line = by_id[path_ids[0]].get("line")
     seg_start = path_ids[0]
     stops = 0
 
@@ -543,7 +542,7 @@ def _make_route_steps(path_ids: List[str], by_id: Dict[str, Dict[str, Any]]) -> 
             stops += 1
             continue
 
-        # Line changed at sid => close previous ride segment
+        # Line changed => close previous ride segment
         if prev_line:
             meta = _line_meta(prev_line)
             steps.append({
@@ -570,10 +569,8 @@ def _make_route_steps(path_ids: List[str], by_id: Dict[str, Dict[str, Any]]) -> 
                 "minutes": int(round(TRANSFER_MIN)),
             })
 
-        # Start new segment from prev_sid (transfer station) to next stations
         seg_start = prev_sid
-        cur_line = this_line
-        stops = 1  # we already moved one edge into the new line
+        stops = 1  # moved one edge into new line
 
     # close last segment
     last_line = by_id[path_ids[-1]].get("line")
@@ -740,11 +737,12 @@ def route_flow(
         walk_to_start = drive_to_start = None
         walk_from_end = drive_from_end = None
 
+        # NOTE: keep this as-is to avoid changing behavior
         try:
             a = get_walk_drive(
-    origin=(float(lat), float(lon)),
-    destination=(float(start_station["lat"]), float(start_station["lon"]))
-)
+                origin=(float(lat), float(lon)),
+                destination=(float(start_station["lat"]), float(start_station["lon"]))
+            )
             walk_to_start  = (a.get("walk")  or {}).get("duration_min")
             drive_to_start = (a.get("drive") or {}).get("duration_min")
         except Exception:
@@ -761,7 +759,6 @@ def route_flow(
             pass
 
         steps = _make_route_steps(path_ids, by_id)
-        print("WALK/DRIVE TO START:", a)
 
         # Save result for "re-show" / change destination
         data["rt_last"] = {
@@ -799,7 +796,7 @@ def route_flow(
 
 
 # ============================================================
-# Schedule flow UPDATED (always returns schedule_inline)
+# Schedule flow (RESTORED trips from backend)
 # ============================================================
 
 def _default_station_codes_from_map(stations: List[Dict[str, Any]]) -> List[str]:
@@ -857,7 +854,6 @@ def _schedule_station_options(stations: List[Dict[str, Any]], limit: int = 6) ->
     return options, opt_map
 
 
-# kept (not used directly now)
 def _next_trips_today_for_station(station_id: str, now_utc: datetime, limit: int = 4) -> List[Dict[str, Any]]:
     trips = fetch_trips_for_station_today(
         station_id,
@@ -867,15 +863,14 @@ def _next_trips_today_for_station(station_id: str, now_utc: datetime, limit: int
     return trips[: max(0, int(limit))]
 
 
-# NEW: schedule_inline payload (Flutter expects station_id + station_name in raw)
 def _schedule_inline_response(station_id: str, station_label: str, answer: str) -> Dict[str, Any]:
     return {
         "matched_faq_id": None,
         "answer": answer,
         "confidence": 1.0,
         "type": "schedule_inline",
-        "station_id": station_id,         # important
-        "station_name": station_label,    # important
+        "station_id": station_id,
+        "station_name": station_label,
         "options": [
             {"id": "1", "label": "تغيير المحطة"},
             {"id": "2", "label": "رجوع للقائمة"},
@@ -951,12 +946,10 @@ def schedule_flow(passenger_id: str, session_id: str, user_message: str) -> Dict
 
         data["sch_station_id"] = st_id
         station_label = _station_display(by_id[st_id])
-
-        # IMPORTANT CHANGE:
+        # ✅ IMPORTANT CHANGE:
         # Backend no longer decides 'today trips' or filters.
         # Flutter ChatScheduleInline will fetch next trips from Firestore within 10 minutes and limit 4.
         save_session(passenger_id, session_id, SCH_SHOWING_TRIPS, data)
-
         return _schedule_inline_response(
             station_id=st_id,
             station_label=station_label,
@@ -1009,7 +1002,7 @@ def ask(req: AskReq):
             )
             return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
 
-        # NEW: route states handled by route_flow and returned as dict
+        # route states handled by route_flow
         if str(state).startswith("rt_"):
             return route_flow(
                 passenger_id=passenger_id,
@@ -1018,8 +1011,10 @@ def ask(req: AskReq):
                 lat=lat,
                 lon=lon
             )
+            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
 
-        #  schedule states
+
+        # schedule states
         if state in {SCH_CHOOSE_STATION, SCH_SHOWING_TRIPS}:
             return schedule_flow(passenger_id=passenger_id, session_id=session_id, user_message=question)
 
@@ -1062,7 +1057,7 @@ def ask(req: AskReq):
                 "options": options,
             }
 
-        # UPDATED: route entry = ask destination مباشرة (بدون خيارات)
+        # route entry = ask destination
         if question == "4":
             data = session.get("data", {}) or {}
             save_session(passenger_id, session_id, RT_ASK_DEST, data)

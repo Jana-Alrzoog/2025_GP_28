@@ -41,6 +41,7 @@ class RouteCard extends StatelessWidget {
     if (t.contains("blue") || t.contains("line1")) return Icons.circle;
     if (t.contains("red") || t.contains("line2")) return Icons.circle;
     if (t.contains("green") || t.contains("line3")) return Icons.circle;
+    if (t.contains("orange") || t.contains("line5")) return Icons.circle;
     return Icons.circle;
   }
 
@@ -64,7 +65,7 @@ class RouteCard extends StatelessWidget {
             child: Text(
               text,
               textDirection: TextDirection.rtl,
-              textAlign: TextAlign.left, // ✅ عكس الجهة
+              textAlign: TextAlign.left, // (نفس ستايلك السابق)
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
             ),
@@ -91,7 +92,7 @@ class RouteCard extends StatelessWidget {
           Text(
             "$label: $minutes د",
             textDirection: TextDirection.rtl,
-            textAlign: TextAlign.left, // ✅ عكس الجهة
+            textAlign: TextAlign.left,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
           ),
         ],
@@ -99,6 +100,7 @@ class RouteCard extends StatelessWidget {
     );
   }
 
+  // ---------- steps ----------
   Widget _stepRowRide(Map<String, dynamic> st) {
     final from = _s(st["from"]);
     final to = _s(st["to"]);
@@ -121,7 +123,6 @@ class RouteCard extends StatelessWidget {
         textDirection: TextDirection.rtl,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // badge (يبقى يمين بصريًا لأننا rtl بالrow)
           Container(
             width: 30,
             height: 30,
@@ -142,19 +143,20 @@ class RouteCard extends StatelessWidget {
 
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, // ✅ عكس الجهة
+              crossAxisAlignment: CrossAxisAlignment.start, // نفس ستايلك
               children: [
                 Text(
                   "اركب $lineName",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left, // ✅
+                  textAlign: TextAlign.left,
                   style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  "من $from إلى $to",
+                  // ✅ عكسنا السهم
+                  "من $from  ←  إلى $to",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left, // ✅
+                  textAlign: TextAlign.left,
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
                 ),
                 if (stops != null) ...[
@@ -162,7 +164,7 @@ class RouteCard extends StatelessWidget {
                   Text(
                     "عدد المحطات: $stops",
                     textDirection: TextDirection.rtl,
-                    textAlign: TextAlign.left, // ✅
+                    textAlign: TextAlign.left,
                     style: TextStyle(
                       color: Colors.black.withOpacity(0.65),
                       fontWeight: FontWeight.w600,
@@ -178,25 +180,19 @@ class RouteCard extends StatelessWidget {
     );
   }
 
-  Widget _stepRowTransfer(Map<String, dynamic> st) {
+  /// ✅ transfer line (عكسنا الجهة + عكسنا الأسهم)
+  Widget _transferInline(Map<String, dynamic> st) {
     final at = _s(st["at"]);
     final toLineName = _s(st["to_line_name"]);
     final toLineColor = _hexColor(_s(st["to_line_color"]), fallback: const Color(0xFF9E9E9E));
-    final toLineIcon = _s(st["to_line_icon"]);
-    final toLineId = _s(st["to_line_id"]);
 
-    return Container(
-      padding: const EdgeInsets.all(10),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         textDirection: TextDirection.rtl,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // badge (swap)
           Container(
             width: 30,
             height: 30,
@@ -210,48 +206,26 @@ class RouteCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
+
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, // ✅ عكس الجهة
-              children: [
-                const Text(
-                  "تحويل",
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F7),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+              ),
+              child: Align(
+                alignment: Alignment.centerRight, // ✅ كلام التحويل يمين
+                child: Text(
+                  // ✅ عكسنا السهم
+                  "تحويل عند: $at  ←  إلى: $toLineName",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left,
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  textAlign: TextAlign.right, // ✅ هنا أهم شيء
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  "عند: $at",
-                  textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  textDirection: TextDirection.rtl,
-                  children: [
-                    Icon(
-                      _iconForLine(toLineIcon.isNotEmpty ? toLineIcon : toLineId),
-                      size: 14,
-                      color: toLineColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        "إلى: $toLineName",
-                        textDirection: TextDirection.rtl,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          color: Colors.black.withOpacity(0.75),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -283,7 +257,6 @@ class RouteCard extends StatelessWidget {
     final walkFrom = _i(times["walk_from_end_min"]);
     final driveFrom = _i(times["drive_from_end_min"]);
 
-    // ✅ total uses MIN(after drop-off)
     int bestAfter = 0;
     String bestMode = "—";
     final w = walkFrom ?? 0;
@@ -315,9 +288,7 @@ class RouteCard extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 360, // تقدرين تقللينها لو تبين
-        ),
+        constraints: const BoxConstraints(maxWidth: 360),
         child: Container(
           margin: const EdgeInsets.only(top: 6, bottom: 6),
           padding: const EdgeInsets.all(10),
@@ -336,8 +307,8 @@ class RouteCard extends StatelessWidget {
           child: Directionality(
             textDirection: TextDirection.rtl,
             child: Column(
-              mainAxisSize: MainAxisSize.min, // ✅ ما فيه سحب
-              crossAxisAlignment: CrossAxisAlignment.start, // ✅ عكس الجهة
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   textDirection: TextDirection.rtl,
@@ -349,10 +320,9 @@ class RouteCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // ✅ الوقت الكلي (الأقل) فقط
                 if (totalMin > 0)
                   Align(
-                    alignment: Alignment.centerRight, // ✅ عكس
+                    alignment: Alignment.centerRight,
                     child: _pill(
                       "الوقت الكلي (الأقل): $totalMin د — حسب $bestMode",
                       icon: Icons.timer_outlined,
@@ -364,14 +334,15 @@ class RouteCard extends StatelessWidget {
                 Text(
                   "الوجهة: $dest",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left, // ✅
+                  textAlign: TextAlign.left,
                   style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "من: $startName  →  إلى: $endName",
+                  // ✅ عكسنا السهم
+                  "من: $startName  ←  إلى: $endName",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.right, // ✅
+                  textAlign: TextAlign.right,
                   style: TextStyle(
                     color: Colors.black.withOpacity(0.75),
                     fontWeight: FontWeight.w700,
@@ -382,7 +353,7 @@ class RouteCard extends StatelessWidget {
                 const SizedBox(height: 10),
 
                 Wrap(
-                  alignment: WrapAlignment.start, // ✅ عكس
+                  alignment: WrapAlignment.start,
                   spacing: 8,
                   runSpacing: 8,
                   children: [
@@ -398,7 +369,7 @@ class RouteCard extends StatelessWidget {
                 const Text(
                   "الخطوات",
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left, // ✅
+                  textAlign: TextAlign.left,
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
@@ -417,10 +388,9 @@ class RouteCard extends StatelessWidget {
 
                 for (final st in steps) ...[
                   if (_s(st["type"]) == "ride") _stepRowRide(st),
-                  if (_s(st["type"]) == "transfer") _stepRowTransfer(st),
+                  if (_s(st["type"]) == "transfer") _transferInline(st),
                 ],
 
-                // ✅ بعد النزول: مشي + سيارة (لكن الوقت الكلي فقط يحسب الأقل)
                 if ((walkFrom ?? 0) > 0 || (driveFrom ?? 0) > 0) ...[
                   const SizedBox(height: 6),
                   Divider(height: 1, color: Colors.black.withOpacity(0.06)),
@@ -437,10 +407,8 @@ class RouteCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      if ((walkFrom ?? 0) > 0)
-                        _timeChip("المشي", walkFrom!, Icons.directions_walk_rounded),
-                      if ((driveFrom ?? 0) > 0)
-                        _timeChip("السيارة", driveFrom!, Icons.directions_car_rounded),
+                      if ((walkFrom ?? 0) > 0) _timeChip("المشي", walkFrom!, Icons.directions_walk_rounded),
+                      if ((driveFrom ?? 0) > 0) _timeChip("السيارة", driveFrom!, Icons.directions_car_rounded),
                     ],
                   ),
                   const SizedBox(height: 6),
