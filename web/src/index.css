@@ -1,0 +1,257 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Tajawal', sans-serif;
+
+    --background: 215 25% 96%;
+    --foreground: 220 35% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 35% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 35% 12%;
+
+    --primary: 215 75% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 20% 93%;
+    --secondary-foreground: 220 30% 18%;
+
+    --muted: 215 15% 94%;
+    --muted-foreground: 215 12% 48%;
+
+    --accent: 215 65% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 18% 88%;
+    --input: 215 18% 88%;
+    --ring: 215 75% 45%;
+
+    --radius: 0.875rem;
+
+    /* Status colors */
+    --status-searching: 45 93% 47%;
+    --status-searching-bg: 45 93% 95%;
+    --status-matched: 215 75% 50%;
+    --status-matched-bg: 215 75% 95%;
+    --status-awaiting: 190 70% 42%;
+    --status-awaiting-bg: 190 70% 94%;
+    --status-collected: 152 60% 42%;
+    --status-collected-bg: 152 60% 94%;
+    --status-closed: 0 55% 50%;
+    --status-closed-bg: 0 55% 95%;
+
+    /* Similarity colors */
+    --sim-high: 152 60% 42%;
+    --sim-medium: 45 93% 47%;
+    --sim-low: 215 12% 62%;
+
+    /* Alert colors */
+    --alert-critical: 0 72% 51%;
+    --alert-warning: 45 93% 47%;
+    --alert-info: 215 75% 50%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 215 13% 91%;
+    --sidebar-ring: 215 75% 50%;
+  }
+
+  .dark {
+    --background: 222 30% 10%;
+    --foreground: 210 20% 92%;
+
+    --card: 222 25% 14%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 222 25% 14%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 215 75% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 20%;
+    --secondary-foreground: 210 15% 85%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 12% 55%;
+
+    --accent: 215 65% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 22%;
+    --ring: 215 75% 55%;
+
+    /* Status colors - dark */
+    --status-searching: 45 93% 55%;
+    --status-searching-bg: 45 40% 15%;
+    --status-matched: 215 75% 60%;
+    --status-matched-bg: 215 40% 15%;
+    --status-awaiting: 190 70% 50%;
+    --status-awaiting-bg: 190 40% 15%;
+    --status-collected: 152 60% 50%;
+    --status-collected-bg: 152 35% 15%;
+    --status-closed: 0 55% 55%;
+    --status-closed-bg: 0 30% 15%;
+
+    --sim-high: 152 60% 50%;
+    --sim-medium: 45 93% 55%;
+    --sim-low: 215 12% 50%;
+
+    --sidebar-background: 222 25% 12%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 210 20% 90%;
+    --sidebar-primary-foreground: 222 25% 12%;
+    --sidebar-accent: 220 20% 18%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 220 15% 22%;
+    --sidebar-ring: 215 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    direction: rtl;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Tajawal', sans-serif;
+    background-image: url('/images/bg-pattern.png');
+    background-size: cover;
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .dark body {
+    background-blend-mode: overlay;
+    background-color: hsl(222, 30%, 10%);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s ease-out both;
+}
+
+@layer components {
+  .dashboard-card {
+    @apply bg-card/95 backdrop-blur-sm rounded-2xl border border-border/60 shadow-sm hover:shadow-md transition-all duration-300;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold;
+  }
+
+  .status-searching {
+    background-color: hsl(var(--status-searching-bg));
+    color: hsl(var(--status-searching));
+  }
+
+  .status-matched {
+    background-color: hsl(var(--status-matched-bg));
+    color: hsl(var(--status-matched));
+  }
+
+  .status-awaiting {
+    background-color: hsl(var(--status-awaiting-bg));
+    color: hsl(var(--status-awaiting));
+  }
+
+  .status-collected {
+    background-color: hsl(var(--status-collected-bg));
+    color: hsl(var(--status-collected));
+  }
+
+  .status-closed {
+    background-color: hsl(var(--status-closed-bg));
+    color: hsl(var(--status-closed));
+  }
+
+  .sim-bar-high {
+    background-color: hsl(var(--sim-high));
+  }
+
+  .sim-bar-medium {
+    background-color: hsl(var(--sim-medium));
+  }
+
+  .sim-bar-low {
+    background-color: hsl(var(--sim-low));
+  }
+
+  .filter-btn {
+    @apply px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border;
+  }
+
+  .filter-btn-active {
+    @apply bg-primary text-primary-foreground border-transparent shadow-sm;
+  }
+
+  .filter-btn-inactive {
+    @apply bg-card/80 text-muted-foreground border-border/60 hover:bg-secondary hover:border-primary/20;
+  }
+
+  /* Subtle scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
