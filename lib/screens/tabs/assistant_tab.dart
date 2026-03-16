@@ -12,10 +12,10 @@ import 'package:geolocator/geolocator.dart';
 
 import 'package:Masar_application_1/services/location_service.dart';
 
-// ✅ inline schedule widget inside chat
+// inline schedule widget inside chat
 import 'package:Masar_application_1/widgets/chat_schedule_inline.dart';
 
-// ✅ NEW: route card widget
+// NEW: route card widget
 import 'package:Masar_application_1/widgets/route_card.dart';
 
 class AssistantTab extends StatefulWidget {
@@ -56,15 +56,11 @@ class _AssistantTabState extends State<AssistantTab> {
     "S6": "المدينة الصناعية الأولى/First Industrial City",
   };
 
-  // Detect base URL for backend (port 8000)
   String _detectBaseUrl() {
     if (kIsWeb) return "http://localhost:8000";
     return "http://10.0.2.2:8000";
   }
 
-  // ----------------------------
-  // Station ID resolver (IMPORTANT)
-  // ----------------------------
   String _norm(String s) {
     final t = s.trim().toLowerCase();
     return t
@@ -76,14 +72,12 @@ class _AssistantTabState extends State<AssistantTab> {
         .replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  /// يحوّل أي مدخل (S1 / KAFD / "المركز المالي") إلى station_id الحقيقي S1..S6
   String? _resolveStationIdFromAny(String? input, {String? stationName}) {
     final raw = (input ?? '').trim();
     final name = (stationName ?? '').trim();
 
     if (raw.isEmpty && name.isEmpty) return null;
 
-    // إذا أصلاً S1..S6
     if (raw.isNotEmpty && RegExp(r'^S\d+$', caseSensitive: false).hasMatch(raw)) {
       return raw.toUpperCase();
     }
@@ -92,7 +86,7 @@ class _AssistantTabState extends State<AssistantTab> {
     final nName = _norm(name);
 
     for (final e in _stationIdMap.entries) {
-      final stationId = e.key; // S1..S6
+      final stationId = e.key;
       final variants = e.value
           .split('/')
           .map((x) => x.trim())
@@ -102,11 +96,9 @@ class _AssistantTabState extends State<AssistantTab> {
       for (final v in variants) {
         final nv = _norm(v);
 
-        // مساواة
         if (nv == nRaw && nRaw.isNotEmpty) return stationId;
         if (nv == nName && nName.isNotEmpty) return stationId;
 
-        // contains
         if (nRaw.isNotEmpty && (nv.contains(nRaw) || nRaw.contains(nv))) return stationId;
         if (nName.isNotEmpty && (nv.contains(nName) || nName.contains(nv))) return stationId;
       }
@@ -181,9 +173,6 @@ class _AssistantTabState extends State<AssistantTab> {
     return (data["photo_url"] ?? "").toString();
   }
 
-  // ----------------------------
-  // Backend call
-  // ----------------------------
   Future<_BackendReply> _askBackend(String text) async {
     final uri = Uri.parse("$_baseUrl/ask");
 
@@ -265,14 +254,11 @@ class _AssistantTabState extends State<AssistantTab> {
 
       final data = jsonDecode(res.body);
 
-      // ✅ DEBUG مهم جدًا (خلّيه مؤقتًا)
-      // ignore: avoid_print
       print("BACKEND RAW => $data");
 
       var answer = (data["answer"] ?? "").toString().trim();
       final type = (data["type"] ?? "text").toString();
 
-      // Friendly Firestore index error
       if (answer.contains("FailedPrecondition") && answer.contains("requires an index")) {
         answer =
             "فيه إعداد ناقص في Firebase (Index) عشان نجيب مواعيد الرحلات.\n"
@@ -280,7 +266,6 @@ class _AssistantTabState extends State<AssistantTab> {
             "بعدها المواعيد بتشتغل طبيعي ✅";
       }
 
-      // Parse options from JSON if present
       final options = <_OptionItem>[];
       final rawOpts = data["options"];
       if (rawOpts is List) {
@@ -315,9 +300,6 @@ class _AssistantTabState extends State<AssistantTab> {
     }
   }
 
-  // ----------------------------
-  // Open -> load menu
-  // ----------------------------
   Future<void> _loadMenuOnOpen() async {
     if (_loadingMenu) return;
     _loadingMenu = true;
@@ -352,6 +334,40 @@ class _AssistantTabState extends State<AssistantTab> {
     _applyOptions(effectiveOptions);
     _scrollDown();
     _loadingMenu = false;
+  }
+
+  Future<void> _openLostFoundDateTimePicker() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+      helpText: "تحديد التاريخ",
+      cancelText: "إلغاء",
+      confirmText: "التالي",
+    );
+
+    if (pickedDate == null) return;
+    if (!mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: "تحديد الوقت",
+      cancelText: "إلغاء",
+      confirmText: "تم",
+    );
+
+    if (pickedTime == null) return;
+
+    final formatted =
+        "${pickedDate.year.toString().padLeft(4, '0')}-"
+        "${pickedDate.month.toString().padLeft(2, '0')}-"
+        "${pickedDate.day.toString().padLeft(2, '0')} "
+        "${pickedTime.hour.toString().padLeft(2, '0')}:"
+        "${pickedTime.minute.toString().padLeft(2, '0')}";
+
+    await _send(formatted);
   }
 
   void _scrollDown() {
@@ -425,9 +441,6 @@ class _AssistantTabState extends State<AssistantTab> {
     }
   }
 
-  // ----------------------------
-  // Send text
-  // ----------------------------
   Future<void> _send([String? forcedText]) async {
     if (_sending) return;
 
@@ -451,7 +464,24 @@ class _AssistantTabState extends State<AssistantTab> {
 
     _setTyping(false);
 
-    // ✅ route card
+    if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
+      final fallback = _parseBotReply(reply.answer);
+      final effectiveText = fallback.cleanedText.isEmpty
+          ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
+          : fallback.cleanedText;
+
+      setState(() {
+        _msgs.add(_Msg(text: effectiveText, fromBot: true));
+        _sending = false;
+      });
+
+      _applyOptions(const []);
+      _scrollDown();
+
+      await _openLostFoundDateTimePicker();
+      return;
+    }
+
     if (reply.type == "route_card") {
       final route = (reply.raw["route"] is Map)
           ? (reply.raw["route"] as Map).cast<String, dynamic>()
@@ -471,7 +501,6 @@ class _AssistantTabState extends State<AssistantTab> {
       return;
     }
 
-    // ✅ schedule inline
     if (reply.type == "schedule_inline") {
       final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
       final stName = (reply.raw["station_name"] ?? "").toString().trim();
@@ -512,9 +541,6 @@ class _AssistantTabState extends State<AssistantTab> {
     _scrollDown();
   }
 
-  // ----------------------------
-  // Send option payload to backend
-  // ----------------------------
   Future<void> _sendOption(_OptionItem opt) async {
     if (_sending) return;
 
@@ -537,7 +563,24 @@ class _AssistantTabState extends State<AssistantTab> {
 
     _setTyping(false);
 
-    // ✅ route card
+    if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
+      final fallback = _parseBotReply(reply.answer);
+      final effectiveText = fallback.cleanedText.isEmpty
+          ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
+          : fallback.cleanedText;
+
+      setState(() {
+        _msgs.add(_Msg(text: effectiveText, fromBot: true));
+        _sending = false;
+      });
+
+      _applyOptions(const []);
+      _scrollDown();
+
+      await _openLostFoundDateTimePicker();
+      return;
+    }
+
     if (reply.type == "route_card") {
       final route = (reply.raw["route"] is Map)
           ? (reply.raw["route"] as Map).cast<String, dynamic>()
@@ -557,7 +600,6 @@ class _AssistantTabState extends State<AssistantTab> {
       return;
     }
 
-    // ✅ schedule inline
     if (reply.type == "schedule_inline") {
       final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
       final stName = (reply.raw["station_name"] ?? "").toString().trim();
@@ -598,9 +640,6 @@ class _AssistantTabState extends State<AssistantTab> {
     _scrollDown();
   }
 
-  // ----------------------------
-  // Image attach
-  // ----------------------------
   Future<void> _attachAndSendImage() async {
     if (_uploadingImage || _sending) return;
 
@@ -639,7 +678,25 @@ class _AssistantTabState extends State<AssistantTab> {
 
       _setTyping(false);
 
-      // ✅ route card
+      if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
+        final fallback = _parseBotReply(reply.answer);
+        final effectiveText = fallback.cleanedText.isEmpty
+            ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
+            : fallback.cleanedText;
+
+        setState(() {
+          _uploadingImage = false;
+          _sending = false;
+          _msgs.add(_Msg(text: effectiveText, fromBot: true));
+        });
+
+        _applyOptions(const []);
+        _scrollDown();
+
+        await _openLostFoundDateTimePicker();
+        return;
+      }
+
       if (reply.type == "route_card") {
         final route = (reply.raw["route"] is Map)
             ? (reply.raw["route"] as Map).cast<String, dynamic>()
@@ -711,9 +768,6 @@ class _AssistantTabState extends State<AssistantTab> {
     }
   }
 
-  // ----------------------------
-  // Icons for options
-  // ----------------------------
   IconData _iconForOptionText(String label) {
     final t = label.toLowerCase();
 
@@ -752,9 +806,6 @@ class _AssistantTabState extends State<AssistantTab> {
     return Icons.arrow_forward_ios_rounded;
   }
 
-  // ----------------------------
-  // Options UI
-  // ----------------------------
   Widget _buildOptionButtons() {
     if (!_hasOptions || _lastOptions.isEmpty) return const SizedBox.shrink();
 
@@ -833,9 +884,6 @@ class _AssistantTabState extends State<AssistantTab> {
     );
   }
 
-  // ----------------------------
-  // Input bar
-  // ----------------------------
   static const double _inputBarH = 58;
   static const double _gapAboveNav = 4;
   static const double bottomNavTotalHeight = 72;
@@ -938,11 +986,7 @@ class _AssistantTabState extends State<AssistantTab> {
                 crossAxisAlignment: msg.fromBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
                 children: [
                   _ChatBubble(msg: msg),
-
-                  // ✅ NEW: Route Card widget
                   if (msg.fromBot && (msg.route != null) && msg.route!.isNotEmpty) RouteCard(route: msg.route!),
-
-                  // ✅ Inline schedule widget (inside chat)
                   if (msg.fromBot &&
                       msg.isScheduleInline == true &&
                       (msg.scheduleStationId ?? "").trim().isNotEmpty)
@@ -950,12 +994,11 @@ class _AssistantTabState extends State<AssistantTab> {
                       stationName: (msg.scheduleStationName ?? "").trim().isNotEmpty
                           ? msg.scheduleStationName!.trim()
                           : "المحطة",
-                      stationId: msg.scheduleStationId!.trim(), // ✅ S1..S6
+                      stationId: msg.scheduleStationId!.trim(),
                       stationIdMap: _stationIdMap,
                       windowMinutes: 10,
                       limitTrips: 4,
                     ),
-
                   if (isLastBotMsgWithOptions) _buildOptionButtons(),
                 ],
               );
@@ -973,9 +1016,6 @@ class _AssistantTabState extends State<AssistantTab> {
   }
 }
 
-// ----------------------------
-// Models
-// ----------------------------
 class _BackendReply {
   final String answer;
   final String type;
@@ -991,8 +1031,8 @@ class _BackendReply {
 }
 
 class _OptionItem {
-  final String id; // payload to send to backend
-  final String label; // text shown to user
+  final String id;
+  final String label;
   _OptionItem({required this.id, required this.label});
 }
 
@@ -1015,10 +1055,10 @@ class _Msg {
   final Uint8List? imageBytes;
 
   final bool isScheduleInline;
-  final String? scheduleStationId; // ✅ S1..S6
+  final String? scheduleStationId;
   final String? scheduleStationName;
 
-  final Map<String, dynamic>? route; // ✅ NEW
+  final Map<String, dynamic>? route;
 
   _Msg({
     this.text,
@@ -1028,13 +1068,9 @@ class _Msg {
     this.isScheduleInline = false,
     this.scheduleStationId,
     this.scheduleStationName,
-    this.route, // ✅ NEW
+    this.route,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Chat bubble UI (نفس حقك - خليته زي ما هو)
-// ---------------------------------------------------------------------------
 
 class _TagParts {
   final String? tag;
@@ -1071,6 +1107,8 @@ IconData _iconFromTag(String? tag) {
       return Icons.schedule_rounded;
     case "LF_DATE":
       return Icons.event_rounded;
+    case "LF_DATETIME":
+      return Icons.event_available_rounded;
     case "LF_CONTACT":
       return Icons.person_rounded;
     case "LF_DONE":
@@ -1096,6 +1134,7 @@ Color _colorFromTag(String? tag) {
     case "LF_STATION":
     case "LF_TIME":
     case "LF_DATE":
+    case "LF_DATETIME":
       return const Color(0xFF2E7D32);
     case "LF_CONTACT":
       return const Color(0xFF00897B);
@@ -1171,44 +1210,64 @@ class _ChatBubble extends StatelessWidget {
     return Column(
       crossAxisAlignment: align,
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(12),
-              topRight: const Radius.circular(12),
-              bottomLeft: Radius.circular(isBot ? 2 : 12),
-              bottomRight: Radius.circular(isBot ? 12 : 2),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12.withOpacity(.05),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
-              )
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isBot) ...[
-                Icon(botIcon, size: 18, color: iconColor),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  cleanText,
-                  textDirection: TextDirection.rtl,
-                  style: TextStyle(color: fg, height: 1.4),
-                ),
+        if (msg.imageBytes != null)
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.all(6),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .65),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isBot ? 2 : 12),
+                bottomRight: Radius.circular(isBot ? 12 : 2),
               ),
-            ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.memory(msg.imageBytes!),
+            ),
+          )
+        else
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isBot ? 2 : 12),
+                bottomRight: Radius.circular(isBot ? 12 : 2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12.withOpacity(.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                )
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isBot) ...[
+                  Icon(botIcon, size: 18, color: iconColor),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    cleanText,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(color: fg, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

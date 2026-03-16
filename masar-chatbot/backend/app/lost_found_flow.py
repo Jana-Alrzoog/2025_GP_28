@@ -15,35 +15,21 @@ STATION_OPTIONS = [
     {"id": "first_industrial", "label": "المدينة الصناعية الاولى"},
 ]
 
-WHEN_OPTIONS = [
-    {"id": "today_morning", "label": "اليوم صباحا"},
-    {"id": "today_noon", "label": "اليوم ظهرا"},
-    {"id": "today_evening", "label": "اليوم مساء"},
-    {"id": "yesterday", "label": "امس"},
-    {"id": "older", "label": "قبل اكثر من يوم"},
-    {"id": "not_sure", "label": "لا اتذكر"},
-]
-
 
 def _format_options(options):
-    # Keep it simple so your Flutter regex catches it: "1 - xxx"
     return "\n".join([f"{i+1} - {opt['label']}" for i, opt in enumerate(options)])
 
 
-def _looks_like_date(s: str) -> bool:
+def _looks_like_datetime(s: str) -> bool:
     s = (s or "").strip()
-    if len(s) != 10:
+    try:
+        datetime.strptime(s, "%Y-%m-%d %H:%M")
+        return True
+    except ValueError:
         return False
-    if s[4] != "-" or s[7] != "-":
-        return False
-    y, m, d = s.split("-")
-    return y.isdigit() and m.isdigit() and d.isdigit()
 
 
 def _normalize_ar_yes_no(msg: str) -> str:
-    """
-    Returns: "yes" | "no" | ""
-    """
     m = (msg or "").strip().lower()
     m = " ".join(m.split())
 
@@ -69,14 +55,6 @@ def handle_lost_found_flow(
     passenger_id: str,
     photo_url: Optional[str] = None,
 ) -> str:
-    """
-    Lost & Found flow.
-
-    Important:
-    - The app uploads an image to /lost-found/upload-image which stores photo_url in session data.
-    - This flow reads photo_url from session data when waiting for the image.
-    - This file returns text messages with stable tags (e.g., [LF_STATION]) so the mobile app can render icons.
-    """
 
     pid = (passenger_id or "").strip() or "anonymous"
 
@@ -89,64 +67,50 @@ def handle_lost_found_flow(
     if passenger_id:
         data["passenger_id"] = passenger_id
 
-    # -------------------------
+    if photo_url:
+        data["photo_url"] = photo_url
+
     # START
-    # -------------------------
     if state == "menu":
         save_session(pid, session_id, "lf_item_type", data)
         return (
             "[LF_START]\n"
-            "بدينا تسجيل بلاغ مفقود.\n\n"
-            "1) اكتبي نوع الغرض المفقود.\n"
+            "تم بدء تسجيل بلاغ مفقود.\n\n"
+            "1) يرجى إدخال نوع الغرض المفقود.\n"
             "مثال: محفظة، جوال، بطاقة، مفاتيح، شنطة."
         )
 
-    # -------------------------
     # ITEM TYPE
-    # -------------------------
     if state == "lf_item_type":
         if not user_message:
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي نوع الغرض المفقود."
-            )
+            return "[LF_ERROR]\nيرجى إدخال نوع الغرض المفقود."
 
         data["item_type"] = user_message
         save_session(pid, session_id, "lf_color", data)
 
-        # ✅ FIX: this step is asking for color => LF_COLOR
         return (
             "[LF_COLOR]\n"
-            "تمام.\n\n"
-            "2) اكتبي لون الغرض.\n"
-            "مثال: اسود، ابيض، احمر، ازرق، فضي.\n"
-            "اذا اللون غير واضح اكتبي: غير واضح."
+            "تم تسجيل النوع.\n\n"
+            "2) يرجى إدخال لون الغرض.\n"
+            "مثال: اسود، ابيض، احمر، ازرق، فضي."
         )
 
-    # -------------------------
     # COLOR
-    # -------------------------
     if state == "lf_color":
         if not user_message:
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي لون الغرض او اكتبي: غير واضح."
-            )
+            return "[LF_ERROR]\nيرجى إدخال لون الغرض أو كتابة: غير واضح."
 
         data["color"] = user_message
         save_session(pid, session_id, "lf_brand", data)
 
-        # ✅ FIX: this step is brand/model => LF_BRAND
         return (
             "[LF_BRAND]\n"
-            "3) اكتبي الماركة او الموديل (اختياري).\n"
-            "مثال: سامسونج، هواوي، نايك.\n"
-            "اذا ما تعرفين اكتبي: تخطي."
+            "3) يرجى إدخال الماركة أو الموديل (اختياري).\n"
+            "مثال: سامسونج، هواوي.\n"
+            "إذا لم يكن معروفا يمكن كتابة: تخطي."
         )
 
-    # -------------------------
-    # BRAND (optional)
-    # -------------------------
+    # BRAND
     if state == "lf_brand":
         if user_message in {"تخطي", "تجاوز", "skip"}:
             data["brand"] = None
@@ -155,36 +119,27 @@ def handle_lost_found_flow(
 
         save_session(pid, session_id, "lf_description", data)
 
-        # ✅ FIX: now asking for description => LF_DESC
         return (
             "[LF_DESC]\n"
-            "4) اكتبي تفاصيل او علامة مميزة (اختياري لكنه يساعد).\n"
-            "مثال: خدش، ستيكر، كفر، كتابة.\n"
-            "اذا ما عندك تفاصيل اكتبي: ماعندي."
+            "4) يرجى إدخال تفاصيل أو علامة مميزة للغرض.\n"
+            "مثال: شنطة يد سوداء صغيرة فيها سحاب ذهبي وخدش بسيط في الجهة الأمامية."
         )
 
-    # -------------------------
     # DESCRIPTION
-    # -------------------------
     if state == "lf_description":
         if not user_message:
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي التفاصيل او اكتبي: ماعندي."
-            )
+            return "[LF_ERROR]\nيرجى إدخال تفاصيل الغرض."
 
-        data["description"] = "" if user_message in {"ماعندي", "ما عندي", "لا يوجد", "none"} else user_message
+        data["description"] = user_message
         save_session(pid, session_id, "lf_photo_choice", data)
 
         return (
             "[LF_PHOTO]\n"
-            "5) هل ترغبين في ارفاق صورة للغرض؟ (اختياري)\n"
-            "اكتبي: نعم او لا."
+            "5) هل ترغب في إرفاق صورة للغرض؟ (اختياري)\n"
+            "يرجى كتابة: نعم أو لا."
         )
 
-    # -------------------------
     # PHOTO CHOICE
-    # -------------------------
     if state == "lf_photo_choice":
         ans = _normalize_ar_yes_no(user_message)
 
@@ -193,9 +148,9 @@ def handle_lost_found_flow(
             save_session(pid, session_id, "lf_expect_photo", data)
             return (
                 "[LF_PHOTO]\n"
-                "تمام.\n"
-                "ارفقي الصورة الان من داخل التطبيق.\n"
-                "اذا تبين تكملين بدون صورة اكتبي: لا."
+                "تم اختيار إرفاق صورة.\n"
+                "يرجى إرفاق الصورة من داخل التطبيق.\n"
+                "للمتابعة بدون صورة يمكن كتابة: لا."
             )
 
         if ans == "no":
@@ -203,19 +158,14 @@ def handle_lost_found_flow(
             save_session(pid, session_id, "lf_station", data)
             return (
                 "[LF_STATION]\n"
-                "تم المتابعة بدون صورة.\n\n"
-                "6) اختاري محطة الفقد:\n\n"
+                "تمت المتابعة بدون صورة.\n\n"
+                "6) يرجى اختيار محطة الفقد:\n\n"
                 f"{_format_options(STATION_OPTIONS)}"
             )
 
-        return (
-            "[LF_ERROR]\n"
-            "الرجاء كتابة: نعم او لا."
-        )
+        return "[LF_ERROR]\nيرجى كتابة: نعم أو لا."
 
-    # -------------------------
-    # WAITING FOR PHOTO ATTACHMENT
-    # -------------------------
+    # WAITING FOR PHOTO
     if state == "lf_expect_photo":
         stored_url = (data.get("photo_url") or "").strip()
         if stored_url:
@@ -223,7 +173,7 @@ def handle_lost_found_flow(
             return (
                 "[LF_STATION]\n"
                 "تم استلام الصورة.\n\n"
-                "6) اختاري محطة الفقد:\n\n"
+                "6) يرجى اختيار محطة الفقد:\n\n"
                 f"{_format_options(STATION_OPTIONS)}"
             )
 
@@ -233,20 +183,18 @@ def handle_lost_found_flow(
             save_session(pid, session_id, "lf_station", data)
             return (
                 "[LF_STATION]\n"
-                "تم المتابعة بدون صورة.\n\n"
-                "6) اختاري محطة الفقد:\n\n"
+                "تمت المتابعة بدون صورة.\n\n"
+                "6) يرجى اختيار محطة الفقد:\n\n"
                 f"{_format_options(STATION_OPTIONS)}"
             )
 
         return (
             "[LF_PHOTO]\n"
-            "بانتظار ارفاق الصورة من التطبيق.\n"
-            "اذا تبين تكملين بدون صورة اكتبي: لا."
+            "بانتظار إرفاق الصورة من داخل التطبيق.\n"
+            "للمتابعة بدون صورة يمكن كتابة: لا."
         )
 
-    # -------------------------
     # STATION
-    # -------------------------
     if state == "lf_station":
         try:
             idx = int(user_message) - 1
@@ -254,94 +202,43 @@ def handle_lost_found_flow(
             data["station_id"] = station["id"]
             data["station_name"] = station["label"]
         except Exception:
-            return (
-                "[LF_ERROR]\n"
-                "الرجاء اختيار رقم صحيح من قائمة المحطات."
-            )
+            return "[LF_ERROR]\nيرجى اختيار رقم صحيح من قائمة المحطات."
 
-        save_session(pid, session_id, "lf_when", data)
+        save_session(pid, session_id, "lf_datetime", data)
+
         return (
-            "[LF_TIME]\n"
-            "7) متى تقريبا فقدت الغرض؟\n\n"
-            f"{_format_options(WHEN_OPTIONS)}"
+            "[LF_DATETIME]\n"
+            "7) يرجى تحديد التاريخ والوقت التقريبيين لفقدان الغرض."
         )
 
-    # -------------------------
-    # WHEN LOST
-    # -------------------------
-    if state == "lf_when":
-        try:
-            idx = int(user_message) - 1
-            when = WHEN_OPTIONS[idx]
-            data["lost_time_id"] = when["id"]
-            data["lost_time_label"] = when["label"]
-        except Exception:
+    # DATETIME
+    if state == "lf_datetime":
+        if not _looks_like_datetime(user_message):
             return (
                 "[LF_ERROR]\n"
-                "الرجاء اختيار رقم صحيح من القائمة."
+                "يرجى إدخال التاريخ والوقت بصيغة صحيحة.\n"
+                "مثال: 2026-03-16 14:30"
             )
 
-        if data["lost_time_id"] == "older":
-            save_session(pid, session_id, "lf_date", data)
-            return (
-                "[LF_DATE]\n"
-                "8) اكتبي التاريخ التقريبي بصيغة YYYY-MM-DD.\n"
-                "مثال: 2026-01-20"
-            )
-
+        data["lost_datetime"] = user_message
         save_session(pid, session_id, "lf_name", data)
-        return (
-            "[LF_CONTACT]\n"
-            "8) اكتبي اسمك الكامل."
-        )
 
-    # -------------------------
-    # DATE
-    # -------------------------
-    if state == "lf_date":
-        if not _looks_like_date(user_message):
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي التاريخ بصيغة YYYY-MM-DD.\n"
-                "مثال: 2026-01-20"
-            )
+        return "[LF_CONTACT]\n8) يرجى إدخال الاسم الكامل."
 
-        data["lost_date"] = user_message
-        save_session(pid, session_id, "lf_name", data)
-        return (
-            "[LF_CONTACT]\n"
-            "9) اكتبي اسمك الكامل."
-        )
-
-    # -------------------------
     # NAME
-    # -------------------------
     if state == "lf_name":
         if not user_message:
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي الاسم الكامل."
-            )
+            return "[LF_ERROR]\nيرجى إدخال الاسم الكامل."
 
         data["name"] = user_message
-
-        # ✅ FIX: move to lf_phone state
         save_session(pid, session_id, "lf_phone", data)
 
-        return (
-            "[LF_CONTACT]\n"
-            "10) اكتبي رقم الجوال للتواصل."
-        )
+        return "[LF_CONTACT]\n9) يرجى إدخال رقم الجوال للتواصل."
 
-    # -------------------------
-    # PHONE + SAVE
-    # -------------------------
+    # PHONE
     if state == "lf_phone":
         if not user_message:
-            return (
-                "[LF_ERROR]\n"
-                "فضلا اكتبي رقم الجوال."
-            )
+            return "[LF_ERROR]\nيرجى إدخال رقم الجوال."
 
         data["phone"] = user_message
         ticket_id = str(uuid.uuid4())[:8].upper()
@@ -351,19 +248,14 @@ def handle_lost_found_flow(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "open",
             "passenger_id": data.get("passenger_id", passenger_id),
-
             "item_type": data.get("item_type", ""),
             "color": data.get("color", ""),
             "brand": data.get("brand", None),
             "description": data.get("description", ""),
             "photo_url": data.get("photo_url", None),
-
             "station_id": data.get("station_id", ""),
             "station_name": data.get("station_name", ""),
-            "lost_time_id": data.get("lost_time_id", ""),
-            "lost_time_label": data.get("lost_time_label", ""),
-            "lost_date": data.get("lost_date", None),
-
+            "lost_datetime": data.get("lost_datetime", ""),
             "name": data.get("name", ""),
             "phone": data.get("phone", ""),
         }
@@ -375,11 +267,8 @@ def handle_lost_found_flow(
             "[LF_DONE]\n"
             "تم تسجيل البلاغ بنجاح.\n"
             f"رقم التذكرة: {ticket_id}\n\n"
-            "سيتم التواصل معك عند العثور على الغرض.\n"
-            "شكرا لاستخدامك مساعد مسار."
+            "سيتم التواصل عند العثور على الغرض.\n"
+            "شكرا لاستخدام مساعد مسار."
         )
 
-    return (
-        "[LF_ERROR]\n"
-        "حدث خطأ غير متوقع. اكتبي: menu للعودة للقائمة."
-    )
+    return "[LF_ERROR]\nحدث خطأ غير متوقع. يرجى كتابة: menu للعودة للقائمة."

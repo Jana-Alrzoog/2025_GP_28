@@ -1000,7 +1000,26 @@ def ask(req: AskReq):
                 user_message=question,
                 passenger_id=passenger_id
             )
-            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
+
+            response_type = "text"
+            options = []
+
+            if reply_text.startswith("[LF_DATETIME]"):
+                response_type = "lf_datetime"
+
+            if reply_text.startswith("[LF_DONE]"):
+                options = [
+                    {"id": "MENU", "label": "رجوع للقائمة"},
+                    {"id": "2", "label": "تسجيل بلاغ عن غرض آخر"},
+                ]
+
+            return {
+                "matched_faq_id": None,
+                "answer": reply_text,
+                "confidence": 1.0,
+                "type": response_type,
+                "options": options,
+            }
 
         # route states handled by route_flow
         if str(state).startswith("rt_"):
@@ -1011,12 +1030,14 @@ def ask(req: AskReq):
                 lat=lat,
                 lon=lon
             )
-            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
-
 
         # schedule states
         if state in {SCH_CHOOSE_STATION, SCH_SHOWING_TRIPS}:
-            return schedule_flow(passenger_id=passenger_id, session_id=session_id, user_message=question)
+            return schedule_flow(
+                passenger_id=passenger_id,
+                session_id=session_id,
+                user_message=question
+            )
 
         if state == GENERAL_STATE:
             faqs = fetch_all_faq()
@@ -1037,11 +1058,39 @@ def ask(req: AskReq):
 
         if question == "1":
             save_session(passenger_id, session_id, GENERAL_STATE, session.get("data", {}) or {})
-            return {"matched_faq_id": None, "answer": "تم. ارسلي سؤالك العام وانا اجاوبك.", "confidence": 1.0, "type": "text"}
+            return {
+                "matched_faq_id": None,
+                "answer": "تم. ارسلي سؤالك العام وانا اجاوبك.",
+                "confidence": 1.0,
+                "type": "text"
+            }
 
         if question == "2":
-            reply_text = handle_lost_found_flow(session_id=session_id, user_message="menu", passenger_id=passenger_id)
-            return {"matched_faq_id": None, "answer": reply_text, "confidence": 1.0, "type": "text"}
+            reply_text = handle_lost_found_flow(
+                session_id=session_id,
+                user_message="menu",
+                passenger_id=passenger_id
+            )
+
+            response_type = "text"
+            options = []
+
+            if reply_text.startswith("[LF_DATETIME]"):
+                response_type = "lf_datetime"
+
+            if reply_text.startswith("[LF_DONE]"):
+                options = [
+                    {"id": "MENU", "label": "رجوع للقائمة"},
+                    {"id": "2", "label": "تسجيل بلاغ عن غرض آخر"},
+                ]
+
+            return {
+                "matched_faq_id": None,
+                "answer": reply_text,
+                "confidence": 1.0,
+                "type": response_type,
+                "options": options,
+            }
 
         if question == "3":
             data = session.get("data", {}) or {}
@@ -1061,7 +1110,12 @@ def ask(req: AskReq):
         if question == "4":
             data = session.get("data", {}) or {}
             save_session(passenger_id, session_id, RT_ASK_DEST, data)
-            return {"matched_faq_id": None, "answer": "وين تبي تروح؟", "confidence": 1.0, "type": "text"}
+            return {
+                "matched_faq_id": None,
+                "answer": "وين تبي تروح؟",
+                "confidence": 1.0,
+                "type": "text"
+            }
 
         faqs = fetch_all_faq()
         result = ask_llm(question, faqs)
@@ -1079,8 +1133,6 @@ def ask(req: AskReq):
             "confidence": 0.0,
             "type": "error"
         }
-
-
 # ----------------------------
 # Upload endpoint
 # ----------------------------
