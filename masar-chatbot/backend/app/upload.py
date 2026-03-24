@@ -1,10 +1,9 @@
 import os
 import uuid
 import mimetypes
-from datetime import timedelta
 from fastapi import UploadFile
 
-from app.firestore import get_bucket  # نفس التهيئة عندك
+from app.firestore import get_bucket
 
 async def upload_lost_found_image(
     file: UploadFile,
@@ -32,9 +31,6 @@ async def upload_lost_found_image(
     data = await file.read()
     blob.upload_from_string(data, content_type=content_type)
 
-    # ✅ بدل make_public: نرجع Signed URL (يشتغل حتى لو البكت ما يسمح public)
-    signed_url = blob.generate_signed_url(
-        expiration=timedelta(days=7),
-        method="GET"
-    )
-    return signed_url
+    # Public URL — no expiration, works with GPT Vision
+    blob.make_public()
+    return blob.public_url
