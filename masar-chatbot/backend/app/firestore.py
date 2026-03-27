@@ -9,13 +9,6 @@ _bucket = None
 
 
 def _resolve_cred_path() -> str:
-    """
-    Resolve Firebase service account credential path.
-    Priority:
-      1) FIREBASE_CRED
-      2) GOOGLE_APPLICATION_CREDENTIALS
-      3) default "serviceAccountKey.json" (project root relative)
-    """
     cred_path = (
         os.getenv("FIREBASE_CRED")
         or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -56,10 +49,6 @@ def get_db():
 
 
 def get_bucket():
-    """
-    Get Firebase Storage bucket (used for image uploads).
-    FIREBASE_STORAGE_BUCKET must be set for storage operations.
-    """
     global _bucket
 
     if _bucket is not None:
@@ -102,3 +91,21 @@ def get_lost_found_report(ticket_id: str):
         return None
 
     return doc.to_dict()
+
+
+def get_passenger_reports(passenger_id: str) -> list:
+    """
+    جيب كل بلاغات المفقودات للراكب
+    """
+    db = get_db()
+    docs = (
+        db.collection("lost_found_reports")
+        .where("passenger_id", "==", passenger_id)
+        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .stream()
+    )
+    reports = []
+    for d in docs:
+        data = d.to_dict() or {}
+        reports.append(data)
+    return reports

@@ -86,7 +86,7 @@ void showBottomBlackSnack(BuildContext context, String message) {
 
 class ProfileTab extends StatefulWidget {
 
-  final ValueChanged<int>? onGoToTab; // 👈 جديد
+  final ValueChanged<int>? onGoToTab; 
 
   const ProfileTab({super.key, this.onGoToTab});
   

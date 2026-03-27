@@ -12,11 +12,9 @@ import 'package:geolocator/geolocator.dart';
 
 import 'package:Masar_application_1/services/location_service.dart';
 
-// inline schedule widget inside chat
 import 'package:Masar_application_1/widgets/chat_schedule_inline.dart';
-
-// NEW: route card widget
 import 'package:Masar_application_1/widgets/route_card.dart';
+import 'package:Masar_application_1/widgets/chat_track_cards.dart';
 
 class AssistantTab extends StatefulWidget {
   const AssistantTab({super.key});
@@ -46,7 +44,6 @@ class _AssistantTabState extends State<AssistantTab> {
 
   bool _sending = false;
 
-  // ✅ Station map (S1..S6 -> variants)
   final Map<String, String> _stationIdMap = const {
     "S1": "المركز المالي/KAFD",
     "S2": "stc/STC",
@@ -95,10 +92,8 @@ class _AssistantTabState extends State<AssistantTab> {
 
       for (final v in variants) {
         final nv = _norm(v);
-
         if (nv == nRaw && nRaw.isNotEmpty) return stationId;
         if (nv == nName && nName.isNotEmpty) return stationId;
-
         if (nRaw.isNotEmpty && (nv.contains(nRaw) || nRaw.contains(nv))) return stationId;
         if (nName.isNotEmpty && (nv.contains(nName) || nName.contains(nv))) return stationId;
       }
@@ -253,7 +248,6 @@ class _AssistantTabState extends State<AssistantTab> {
       }
 
       final data = jsonDecode(res.body);
-
       print("BACKEND RAW => $data");
 
       var answer = (data["answer"] ?? "").toString().trim();
@@ -441,6 +435,87 @@ class _AssistantTabState extends State<AssistantTab> {
     }
   }
 
+  // ← helper مشترك لمعالجة الـ reply
+  bool _handleSpecialReply(_BackendReply reply, {bool fromImage = false}) {
+    if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
+      final fallback = _parseBotReply(reply.answer);
+      final effectiveText = fallback.cleanedText.isEmpty
+          ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
+          : fallback.cleanedText;
+      setState(() {
+        if (fromImage) _uploadingImage = false;
+        _sending = false;
+        _msgs.add(_Msg(text: effectiveText, fromBot: true));
+      });
+      _applyOptions(const []);
+      _scrollDown();
+      _openLostFoundDateTimePicker();
+      return true;
+    }
+
+    if (reply.type == "route_card") {
+      final route = (reply.raw["route"] is Map)
+          ? (reply.raw["route"] as Map).cast<String, dynamic>()
+          : <String, dynamic>{};
+      setState(() {
+        if (fromImage) _uploadingImage = false;
+        _sending = false;
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
+          route: route,
+        ));
+      });
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return true;
+    }
+
+    if (reply.type == "schedule_inline") {
+      final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
+      final stName = (reply.raw["station_name"] ?? "").toString().trim();
+      final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
+      setState(() {
+        if (fromImage) _uploadingImage = false;
+        _sending = false;
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
+          isScheduleInline: true,
+          scheduleStationId: resolvedId,
+          scheduleStationName: stName,
+        ));
+      });
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return true;
+    }
+
+    if (reply.type == "track_cards") {
+      final rawReports = reply.raw["reports"];
+      final reports = (rawReports is List)
+          ? rawReports
+              .whereType<Map>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList()
+          : <Map<String, dynamic>>[];
+      setState(() {
+        if (fromImage) _uploadingImage = false;
+        _sending = false;
+        _msgs.add(_Msg(
+          fromBot: true,
+          text: reply.answer.isEmpty ? "هذي بلاغاتك:" : reply.answer,
+          trackReports: reports,
+        ));
+      });
+      _applyOptionsOrFallback(reply.options);
+      _scrollDown();
+      return true;
+    }
+
+    return false;
+  }
+
   Future<void> _send([String? forcedText]) async {
     if (_sending) return;
 
@@ -461,67 +536,9 @@ class _AssistantTabState extends State<AssistantTab> {
 
     final reply = await _askBackend(txt);
     if (!mounted) return;
-
     _setTyping(false);
 
-    if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
-      final fallback = _parseBotReply(reply.answer);
-      final effectiveText = fallback.cleanedText.isEmpty
-          ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
-          : fallback.cleanedText;
-
-      setState(() {
-        _msgs.add(_Msg(text: effectiveText, fromBot: true));
-        _sending = false;
-      });
-
-      _applyOptions(const []);
-      _scrollDown();
-
-      await _openLostFoundDateTimePicker();
-      return;
-    }
-
-    if (reply.type == "route_card") {
-      final route = (reply.raw["route"] is Map)
-          ? (reply.raw["route"] as Map).cast<String, dynamic>()
-          : <String, dynamic>{};
-
-      setState(() {
-        _msgs.add(_Msg(
-          fromBot: true,
-          text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
-          route: route,
-        ));
-        _sending = false;
-      });
-
-      _applyOptionsOrFallback(reply.options);
-      _scrollDown();
-      return;
-    }
-
-    if (reply.type == "schedule_inline") {
-      final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
-      final stName = (reply.raw["station_name"] ?? "").toString().trim();
-
-      final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
-
-      setState(() {
-        _msgs.add(_Msg(
-          fromBot: true,
-          text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
-          isScheduleInline: true,
-          scheduleStationId: resolvedId,
-          scheduleStationName: stName,
-        ));
-        _sending = false;
-      });
-
-      _applyOptionsOrFallback(reply.options);
-      _scrollDown();
-      return;
-    }
+    if (_handleSpecialReply(reply)) return;
 
     final fallback = _parseBotReply(reply.answer);
     final effectiveText = fallback.cleanedText.isEmpty
@@ -560,67 +577,9 @@ class _AssistantTabState extends State<AssistantTab> {
 
     final reply = await _askBackend(backend);
     if (!mounted) return;
-
     _setTyping(false);
 
-    if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
-      final fallback = _parseBotReply(reply.answer);
-      final effectiveText = fallback.cleanedText.isEmpty
-          ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
-          : fallback.cleanedText;
-
-      setState(() {
-        _msgs.add(_Msg(text: effectiveText, fromBot: true));
-        _sending = false;
-      });
-
-      _applyOptions(const []);
-      _scrollDown();
-
-      await _openLostFoundDateTimePicker();
-      return;
-    }
-
-    if (reply.type == "route_card") {
-      final route = (reply.raw["route"] is Map)
-          ? (reply.raw["route"] as Map).cast<String, dynamic>()
-          : <String, dynamic>{};
-
-      setState(() {
-        _msgs.add(_Msg(
-          fromBot: true,
-          text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
-          route: route,
-        ));
-        _sending = false;
-      });
-
-      _applyOptionsOrFallback(reply.options);
-      _scrollDown();
-      return;
-    }
-
-    if (reply.type == "schedule_inline") {
-      final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
-      final stName = (reply.raw["station_name"] ?? "").toString().trim();
-
-      final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
-
-      setState(() {
-        _msgs.add(_Msg(
-          fromBot: true,
-          text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
-          isScheduleInline: true,
-          scheduleStationId: resolvedId,
-          scheduleStationName: stName,
-        ));
-        _sending = false;
-      });
-
-      _applyOptionsOrFallback(reply.options);
-      _scrollDown();
-      return;
-    }
+    if (_handleSpecialReply(reply)) return;
 
     final fallback = _parseBotReply(reply.answer);
     final effectiveText = fallback.cleanedText.isEmpty
@@ -675,69 +634,9 @@ class _AssistantTabState extends State<AssistantTab> {
 
       final reply = await _askBackend("تم");
       if (!mounted) return;
-
       _setTyping(false);
 
-      if (reply.type == "lf_datetime" || reply.answer.startsWith("[LF_DATETIME]")) {
-        final fallback = _parseBotReply(reply.answer);
-        final effectiveText = fallback.cleanedText.isEmpty
-            ? (reply.answer.isEmpty ? "يرجى تحديد التاريخ والوقت." : reply.answer)
-            : fallback.cleanedText;
-
-        setState(() {
-          _uploadingImage = false;
-          _sending = false;
-          _msgs.add(_Msg(text: effectiveText, fromBot: true));
-        });
-
-        _applyOptions(const []);
-        _scrollDown();
-
-        await _openLostFoundDateTimePicker();
-        return;
-      }
-
-      if (reply.type == "route_card") {
-        final route = (reply.raw["route"] is Map)
-            ? (reply.raw["route"] as Map).cast<String, dynamic>()
-            : <String, dynamic>{};
-
-        setState(() {
-          _uploadingImage = false;
-          _sending = false;
-          _msgs.add(_Msg(
-            fromBot: true,
-            text: reply.answer.isEmpty ? "هذا أفضل مسار لك:" : reply.answer,
-            route: route,
-          ));
-        });
-
-        _applyOptionsOrFallback(reply.options);
-        _scrollDown();
-        return;
-      }
-
-      if (reply.type == "schedule_inline") {
-        final rawStation = (reply.raw["station_id"] ?? reply.raw["station_code"] ?? "").toString().trim();
-        final stName = (reply.raw["station_name"] ?? "").toString().trim();
-        final resolvedId = _resolveStationIdFromAny(rawStation, stationName: stName);
-
-        setState(() {
-          _uploadingImage = false;
-          _sending = false;
-          _msgs.add(_Msg(
-            fromBot: true,
-            text: reply.answer.isEmpty ? "تمام، هذي أقرب الرحلات:" : reply.answer,
-            isScheduleInline: true,
-            scheduleStationId: resolvedId,
-            scheduleStationName: stName,
-          ));
-        });
-
-        _applyOptionsOrFallback(reply.options);
-        _scrollDown();
-        return;
-      }
+      if (_handleSpecialReply(reply, fromImage: true)) return;
 
       final fallback = _parseBotReply(reply.answer);
       final effectiveText = fallback.cleanedText.isEmpty
@@ -780,26 +679,17 @@ class _AssistantTabState extends State<AssistantTab> {
     if (t.contains("مواعيد") || t.contains("الجدول") || t.contains("trip") || t.contains("schedule")) {
       return Icons.schedule_rounded;
     }
-
-    final isRoute = t.contains("تخطيط") ||
-        t.contains("طريق") ||
-        t.contains("وجهة") ||
-        t.contains("إلى") ||
-        t.contains("الى") ||
-        t.contains("route") ||
-        t.contains("directions");
-    if (isRoute) return Icons.alt_route_rounded;
-
-    if (t.contains("اليوم") || t.contains("today")) return Icons.today_rounded;
-    if (t.contains("بكره") || t.contains("بكرة") || t.contains("tomorrow")) return Icons.calendar_month_rounded;
-    if (t.contains("تاريخ") || t.contains("date")) return Icons.event_rounded;
-
+    if (t.contains("تخطيط") || t.contains("طريق") || t.contains("وجهة") || t.contains("route")) {
+      return Icons.alt_route_rounded;
+    }
+    if (t.contains("تتبع") || t.contains("بلاغاتي")) {
+      return Icons.track_changes_rounded;
+    }
     if (t.contains("رجوع") || t.contains("القائمه") || t.contains("القائمة") || t.contains("menu")) {
       return Icons.arrow_back_rounded;
     }
     if (t.contains("تغيير")) return Icons.swap_horiz_rounded;
-
-    if (t.contains("محطه") || t.contains("محطة") || t.contains("مترو") || t.contains("kafd") || t.contains("stc")) {
+    if (t.contains("محطه") || t.contains("محطة") || t.contains("مترو")) {
       return Icons.train_outlined;
     }
 
@@ -827,21 +717,12 @@ class _AssistantTabState extends State<AssistantTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ← حذفنا رقم عدد الخيارات
           Row(
-            children: [
-              const Icon(Icons.grid_view_rounded, size: 18, color: Color(0xFF5B3FCB)),
-              const SizedBox(width: 8),
-              const Text("الخيارات", textDirection: TextDirection.rtl, style: TextStyle(fontWeight: FontWeight.w800)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.black.withOpacity(0.06)),
-                ),
-                child: Text("${_lastOptions.length}", style: const TextStyle(fontWeight: FontWeight.w700)),
-              ),
+            children: const [
+              Icon(Icons.grid_view_rounded, size: 18, color: Color(0xFF5B3FCB)),
+              SizedBox(width: 8),
+              Text("الخيارات", textDirection: TextDirection.rtl, style: TextStyle(fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 10),
@@ -966,7 +847,6 @@ class _AssistantTabState extends State<AssistantTab> {
   @override
   Widget build(BuildContext context) {
     final safeBottom = MediaQuery.of(context).padding.bottom;
-
     final inputBottom = safeBottom + bottomNavTotalHeight + _gapAboveNav;
     final listBottomPadding = inputBottom + _inputBarH + 24;
 
@@ -986,7 +866,8 @@ class _AssistantTabState extends State<AssistantTab> {
                 crossAxisAlignment: msg.fromBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
                 children: [
                   _ChatBubble(msg: msg),
-                  if (msg.fromBot && (msg.route != null) && msg.route!.isNotEmpty) RouteCard(route: msg.route!),
+                  if (msg.fromBot && (msg.route != null) && msg.route!.isNotEmpty)
+                    RouteCard(route: msg.route!),
                   if (msg.fromBot &&
                       msg.isScheduleInline == true &&
                       (msg.scheduleStationId ?? "").trim().isNotEmpty)
@@ -999,6 +880,11 @@ class _AssistantTabState extends State<AssistantTab> {
                       windowMinutes: 10,
                       limitTrips: 4,
                     ),
+                  // ← track cards
+                  if (msg.fromBot &&
+                      msg.trackReports != null &&
+                      msg.trackReports!.isNotEmpty)
+                    ChatTrackCards(reports: msg.trackReports!),
                   if (isLastBotMsgWithOptions) _buildOptionButtons(),
                 ],
               );
@@ -1015,6 +901,10 @@ class _AssistantTabState extends State<AssistantTab> {
     );
   }
 }
+
+// ─────────────────────────────────────────
+// Data classes
+// ─────────────────────────────────────────
 
 class _BackendReply {
   final String answer;
@@ -1059,6 +949,7 @@ class _Msg {
   final String? scheduleStationName;
 
   final Map<String, dynamic>? route;
+  final List<Map<String, dynamic>>? trackReports; // ← جديد
 
   _Msg({
     this.text,
@@ -1069,8 +960,13 @@ class _Msg {
     this.scheduleStationId,
     this.scheduleStationName,
     this.route,
+    this.trackReports,
   });
 }
+
+// ─────────────────────────────────────────
+// Tag helpers
+// ─────────────────────────────────────────
 
 class _TagParts {
   final String? tag;
@@ -1089,61 +985,39 @@ _TagParts _extractTagFromStart(String text) {
 
 IconData _iconFromTag(String? tag) {
   switch (tag) {
-    case "LF_START":
-      return Icons.assignment_rounded;
-    case "LF_ITEM":
-      return Icons.inventory_2_rounded;
-    case "LF_COLOR":
-      return Icons.color_lens_rounded;
-    case "LF_BRAND":
-      return Icons.sell_rounded;
-    case "LF_DESC":
-      return Icons.notes_rounded;
-    case "LF_PHOTO":
-      return Icons.photo_camera_rounded;
-    case "LF_STATION":
-      return Icons.location_on_rounded;
-    case "LF_TIME":
-      return Icons.schedule_rounded;
-    case "LF_DATE":
-      return Icons.event_rounded;
-    case "LF_DATETIME":
-      return Icons.event_available_rounded;
-    case "LF_CONTACT":
-      return Icons.person_rounded;
-    case "LF_DONE":
-      return Icons.check_circle_rounded;
-    case "LF_ERROR":
-      return Icons.error_outline_rounded;
-    default:
-      return Icons.smart_toy_outlined;
+    case "LF_START":   return Icons.assignment_rounded;
+    case "LF_ITEM":    return Icons.inventory_2_rounded;
+    case "LF_COLOR":   return Icons.color_lens_rounded;
+    case "LF_BRAND":   return Icons.sell_rounded;
+    case "LF_DESC":    return Icons.notes_rounded;
+    case "LF_PHOTO":   return Icons.photo_camera_rounded;
+    case "LF_STATION": return Icons.location_on_rounded;
+    case "LF_TIME":    return Icons.schedule_rounded;
+    case "LF_DATE":    return Icons.event_rounded;
+    case "LF_DATETIME":return Icons.event_available_rounded;
+    case "LF_CONTACT": return Icons.person_rounded;
+    case "LF_DONE":    return Icons.check_circle_rounded;
+    case "LF_ERROR":   return Icons.error_outline_rounded;
+    default:           return Icons.smart_toy_outlined;
   }
 }
 
 Color _colorFromTag(String? tag) {
   switch (tag) {
-    case "LF_START":
-      return const Color(0xFF5B3FCB);
+    case "LF_START":   return const Color(0xFF5B3FCB);
     case "LF_ITEM":
     case "LF_COLOR":
     case "LF_BRAND":
-    case "LF_DESC":
-      return const Color(0xFF1976D2);
-    case "LF_PHOTO":
-      return const Color(0xFF6A1B9A);
+    case "LF_DESC":    return const Color(0xFF1976D2);
+    case "LF_PHOTO":   return const Color(0xFF6A1B9A);
     case "LF_STATION":
     case "LF_TIME":
     case "LF_DATE":
-    case "LF_DATETIME":
-      return const Color(0xFF2E7D32);
-    case "LF_CONTACT":
-      return const Color(0xFF00897B);
-    case "LF_DONE":
-      return const Color(0xFF2E7D32);
-    case "LF_ERROR":
-      return const Color(0xFFD32F2F);
-    default:
-      return Colors.black54;
+    case "LF_DATETIME":return const Color(0xFF2E7D32);
+    case "LF_CONTACT": return const Color(0xFF00897B);
+    case "LF_DONE":    return const Color(0xFF2E7D32);
+    case "LF_ERROR":   return const Color(0xFFD32F2F);
+    default:           return Colors.black54;
   }
 }
 
@@ -1161,19 +1035,21 @@ IconData _iconFromTagSmart(String? tag, String cleanText) {
   final s = cleanText.toLowerCase();
   if (s.contains("لون")) return Icons.color_lens_rounded;
   if (s.contains("الماركة") || s.contains("الموديل")) return Icons.sell_rounded;
-  if (s.contains("تفاصيل") || s.contains("علامة مميزة") || s.contains("علامه مميزه")) return Icons.notes_rounded;
-  if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) return Icons.photo_camera_rounded;
+  if (s.contains("تفاصيل") || s.contains("علامة مميزة")) return Icons.notes_rounded;
+  if (s.contains("صورة") || s.contains("ارفقي")) return Icons.photo_camera_rounded;
   if (s.contains("محطة") || s.contains("محطه")) return Icons.location_on_rounded;
-
   if (s.contains("متى") || s.contains("وقت") || s.contains("تاريخ")) {
     if (s.contains("تاريخ") || RegExp(r'\d{4}-\d{2}-\d{2}').hasMatch(s)) return Icons.event_rounded;
     return Icons.schedule_rounded;
   }
-
   if (s.contains("اسم") || s.contains("جوال") || s.contains("رقم")) return Icons.person_rounded;
 
   return _iconFromTag(tag);
 }
+
+// ─────────────────────────────────────────
+// Chat bubble
+// ─────────────────────────────────────────
 
 class _ChatBubble extends StatelessWidget {
   final _Msg msg;
@@ -1184,7 +1060,7 @@ class _ChatBubble extends StatelessWidget {
     if (s.contains("بلاغ") || s.contains("مفقود")) return Icons.report_problem_outlined;
     if (s.contains("محطة") || s.contains("محطات")) return Icons.train_outlined;
     if (s.contains("وقت") || s.contains("متى") || s.contains("تاريخ")) return Icons.schedule_outlined;
-    if (s.contains("صورة") || s.contains("ارفقي") || s.contains("ارفاق")) return Icons.photo_camera_outlined;
+    if (s.contains("صورة") || s.contains("ارفقي")) return Icons.photo_camera_outlined;
     if (s.contains("رقم التذكرة") || s.contains("تذكرة")) return Icons.confirmation_number_outlined;
     if (s.contains("خطأ") || s.contains("غير صحيح") || s.contains("تعذر")) return Icons.error_outline;
     return Icons.smart_toy_outlined;
@@ -1205,7 +1081,9 @@ class _ChatBubble extends StatelessWidget {
     final botIcon = isBot
         ? (tag != null ? _iconFromTagSmart(tag, cleanText) : _fallbackBotIconForText(cleanText))
         : null;
-    final iconColor = isBot ? (tag != null ? _colorFromTag(tag) : _fallbackColorForText(cleanText)) : null;
+    final iconColor = isBot
+        ? (tag != null ? _colorFromTag(tag) : _fallbackColorForText(cleanText))
+        : null;
 
     return Column(
       crossAxisAlignment: align,
