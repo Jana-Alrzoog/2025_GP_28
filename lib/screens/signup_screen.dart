@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/signin_screen.dart';
 import '../theme/theme.dart';
 import '../widgets/custom_scaffold.dart';
-import 'home_shell.dart';
+import 'verify_email_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -84,40 +84,43 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   //  فحص الاسم:  تسمح بس بحروف عربي/إنجليزي + أرقام + مسافات 
   final RegExp _nameAllowed = RegExp(r'^[a-zA-Z\u0621-\u064A0-9\u0660-\u0669\s]+$');
+Future<void> _register() async {
+  if (!_formSignupKey.currentState!.validate()) return;
 
-  Future<void> _register() async {
-    if (!_formSignupKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
+  try {
+    // إنشاء الحساب في Firebase Auth
+    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
-    setState(() => _isLoading = true);
-    try {
-      //  إنشاء الحساب في Firebase Auth
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+    final uid = cred.user!.uid;
+
+    // إرسال رابط تفعيل البريد الإلكتروني
+    await cred.user!.sendEmailVerification();
+
+    // تخزين البيانات في Passenger
+    await FirebaseFirestore.instance.collection('Passenger').doc(uid).set({
+      'name': _nameController.text.trim(),
+      'email': _emailController.text.trim(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // الانتقال إلى صفحة التحقق بدل الصفحة الرئيسية
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
       );
-      final uid = cred.user!.uid;
-
-      // passenger تخزين البيانات في  
-      await FirebaseFirestore.instance.collection('Passenger').doc(uid).set({
-        'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      //  الانتقال بعد النجاح
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeShell()),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'حدث خطأ أثناء التسجيل')),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+  } on FirebaseAuthException catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.message ?? 'حدث خطأ أثناء التسجيل')),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {

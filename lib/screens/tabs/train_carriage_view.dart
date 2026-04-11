@@ -119,9 +119,9 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
   //   Firestore 
   Future<void> _fetchCarriageData() async {
     try {
-      const monthKey = '2025-11_12';
+      final monthKey = '${widget.tripId.substring(0, 4)}-${widget.tripId.substring(4, 6)}';
       final fs = FirebaseFirestore.instance;
-
+      
       // trips_month / 2025-11_12 / trips / {tripId}
       final tripRef = fs
           .collection('trips_month')
@@ -355,6 +355,7 @@ class _TrainCarriageViewState extends State<TrainCarriageView>
       });
     }
   }
+  
 
   String _getCrowdingLevel(double percent) {
     if (percent >= 80) return 'extreme';

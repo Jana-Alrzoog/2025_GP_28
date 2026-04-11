@@ -4,7 +4,7 @@ import 'package:fluid_bottom_nav_bar/fluid_bottom_nav_bar.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/assistant_tab.dart';
 import 'tabs/profile_tab.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import '/services/notifications_onboarding.dart';
 
 class HomeShell extends StatefulWidget {
@@ -28,13 +28,17 @@ class _HomeShellState extends State<HomeShell> {
     ProfileTab(onGoToTab: _setTab),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+ @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user != null && user.emailVerified) {
       NotificationsOnboarding.maybeRun(context);
-    });
-  }
+    }
+  });
+}
 
   @override
   Widget build(BuildContext context) {

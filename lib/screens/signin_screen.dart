@@ -6,6 +6,7 @@ import '../widgets/custom_scaffold.dart';
 import '../../theme/theme.dart';
 import 'home_shell.dart';
 import 'forgot_password_screen.dart';
+import 'verify_email_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -40,14 +41,29 @@ class _SignInScreenState extends State<SignInScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
-      );
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+  email: _emailController.text.trim(),
+  password: _passwordController.text.trim(),
+);
+
+await cred.user!.reload();
+final user = FirebaseAuth.instance.currentUser;
+
+if (!mounted) return;
+
+if (user != null && user.emailVerified) {
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(builder: (_) => const HomeShell()),
+  );
+} else {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('فعّل بريدك الإلكتروني أولاً')),
+  );
+
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+  );
+}
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
