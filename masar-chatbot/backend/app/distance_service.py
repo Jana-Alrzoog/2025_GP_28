@@ -94,17 +94,6 @@ def get_walk_drive(
     *,
     include_traffic_for_drive: bool = True,
 ) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        "walk":  {"duration_min": int, "distance_m": int, "duration_text": str, "distance_text": str, "duration_sec": int} | None,
-        "drive": {"duration_min": int, "distance_m": int, "duration_text": str, "distance_text": str, "duration_sec": int} | None
-      }
-
-    Notes:
-    - Always attempts both walking and driving.
-    - Driving will try to use traffic-aware ETA if include_traffic_for_drive=True.
-    """
     out: Dict[str, Any] = {"walk": None, "drive": None}
 
     # Walking
