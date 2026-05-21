@@ -1,0 +1,164 @@
+[
+  {
+    "id": "S1",
+    "metrostationcode": "1A1/4A1",
+    "metrostationname": "KAFD",
+    "metrostationnamear": "المركز المالي",
+    "metroline": "Line1",
+    "metrolinename": "Blue line",
+    "metrolinenamear": "المسار الأزرق",
+    "mstationtypecode": 1,
+    "mstationtypename": "Elevated",
+    "mstationtypenamear": "مرتفع",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.64364447641301, 24.76800392512061],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": null,
+    "commentsar": null,
+    "stationseq": 3,
+    "geo_point_2d": {
+      "lon": 46.64364447641301,
+      "lat": 24.76800392512061
+    }
+  },
+  {
+    "id": "S2",
+    "metrostationcode": "1B3/2B2",
+    "metrostationname": "stc",
+    "metrostationnamear": "stc",
+    "metroline": "Line2",
+    "metrolinename": "Red line",
+    "metrolinenamear": "المسار الأحمر",
+    "mstationtypecode": 4,
+    "mstationtypename": "Deep Underground",
+    "mstationtypenamear": "تحت الأرض على عمق كبير",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.66654513995131, 24.72655843698455],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": null,
+    "commentsar": null,
+    "stationseq": 30,
+    "geo_point_2d": {
+      "lon": 46.66654513995131,
+      "lat": 24.72655843698455
+    }
+  },
+  {
+    "id": "S3",
+    "metrostationcode": "1F7/3E2",
+    "metrostationname": "Qasr Al Hokm",
+    "metrostationnamear": "قصر الحكم",
+    "metroline": "Line1",
+    "metrolinename": "Blue line",
+    "metrolinenamear": "المسار الأزرق",
+    "mstationtypecode": 4,
+    "mstationtypename": "Deep Underground",
+    "mstationtypenamear": "تحت الأرض على عمق كبير",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.71611888836972, 24.62858166288806],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": null,
+    "commentsar": null,
+    "stationseq": 18,
+    "geo_point_2d": {
+      "lon": 46.71611888836972,
+      "lat": 24.62858166288806
+    }
+  },
+  {
+    "id": "S4",
+    "metrostationcode": "1F4/5A1",
+    "metrostationname": "National Museum",
+    "metrostationnamear": "المتحف الوطني",
+    "metroline": "Line1",
+    "metrolinename": "Blue line",
+    "metrolinenamear": "المسار الأزرق",
+    "mstationtypecode": 4,
+    "mstationtypename": "Deep Underground",
+    "mstationtypenamear": "تحت الأرض على عمق كبير",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.71416493164232, 24.64606261233078],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": null,
+    "commentsar": null,
+    "stationseq": 16,
+    "geo_point_2d": {
+      "lon": 46.71416493164232,
+      "lat": 24.64606261233078
+    }
+  },
+  {
+    "id": "S5",
+    "metrostationcode": "4G3",
+    "metrostationname": "Airport T1-2",
+    "metrostationnamear": "الصالة 1-2",
+    "metroline": "Line4",
+    "metrolinename": "Yellow line",
+    "metrolinenamear": "المسار الأصفر",
+    "mstationtypecode": 1,
+    "mstationtypename": "Elevated",
+    "mstationtypenamear": "مرتفع",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.70002847728534, 24.96281541599763],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": "Modification on 26.03.2025, the English name changed from Terminal 1-2 to Airport T1-2",
+    "commentsar": "تم تعديل الاسم من Terminal 1-2 إلى Airport T1-2",
+    "stationseq": 71,
+    "geo_point_2d": {
+      "lon": 46.70002847728534,
+      "lat": 24.96281541599763
+    }
+  },
+  {
+    "id": "S6",
+    "metrostationcode": "3C6",
+    "metrostationname": "First Industrial City",
+    "metrostationnamear": "المدينة الصناعية الأولى",
+    "metroline": "Line3",
+    "metrolinename": "Orange line",
+    "metrolinenamear": "المسار البرتقالي",
+    "mstationtypecode": 4,
+    "mstationtypename": "Deep Underground",
+    "mstationtypenamear": "تحت الأرض على عمق كبير",
+    "geoshape": {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [46.73949283534146, 24.64518207915902],
+        "type": "Point"
+      },
+      "properties": {}
+    },
+    "comments": null,
+    "commentsar": null,
+    "stationseq": 28,
+    "geo_point_2d": {
+      "lon": 46.73949283534146,
+      "lat": 24.64518207915902
+    }
+  }
+]
